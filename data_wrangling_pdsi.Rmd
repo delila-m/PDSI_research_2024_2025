@@ -60,7 +60,7 @@ An initial attempt to fix the naming conventions, I'm not 100% sure this is corr
 ```{r}
 head(names(pima.pdsi.cropped))
 ```
-Looking at the original 'day number' label, it looks like the isn't observations over every single day, so I'll have to figure out how to translate the frequency of these labels to new labels.
+Looking at the original 'day number' labels, it looks like  observations don't cover every single consecutive day, so I'll have to figure out how to translate the frequency of these labels to the new labels.
 ```{r}
 # creating the initial date vector
 start_date <- as.Date("1979-01-01")
