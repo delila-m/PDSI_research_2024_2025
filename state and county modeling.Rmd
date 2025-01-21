@@ -1,0 +1,102 @@
+---
+title: "Modeling"
+author: "Delila Medlin"
+date: "`r Sys.Date()`"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+source("C:/Users/delil/Desktop/Fall 2024/Research 2024/Data/Preliminary_modeling/drought_functions.R")
+```
+
+Loading in the pdsi data
+```{r}
+pdsi <- rast("agg_met_pdsi_1979_CurrentYear_CONUS.nc")
+```
+
+Pima County, AZ
+```{r}
+set.seed(1)
+drought.az.pima <- read.csv("USDM-Pima.csv")
+pima <- clean.county.data("Arizona", "Pima", pdsi, drought.az.pima)
+
+# model with single training and testing set
+pima.train <- pima %>% sample_frac(0.80)
+pima.test <- anti_join(pima, pima.train, by = 'id')
+
+pima.rf.fit <- randomForest(WeightedAverage ~ ., 
+             data = pima.train, 
+             importance = TRUE)
+summary(pima.rf.fit)
+pima.preds <- predict(pima.rf.fit, pima.test)
+RMSE(pima.test$WeightedAverage, pima.preds)
+
+# modeling using cross validation
+ctrl <- trainControl(method = "cv", number = 10)
+pima.cv.rf.fit <- train(WeightedAverage ~ ., 
+                   data = pima, 
+                   method = "rf", 
+                   trControl = ctrl)
+
+print(pima.cv.rf.fit)
+
+
+quick.rf(pima)
+```
+
+Lewis County, WV
+```{r}
+set.seed(1)
+drought.lewis <- read.csv("USDM-54041-Lewis-WV.csv")
+lewis <- clean.county.data("West Virginia", "Lewis", pdsi, drought.lewis)
+
+# model with single training and testing set
+lewis.train <- lewis %>% sample_frac(0.80)
+lewis.test <- anti_join(lewis, lewis.train, by = 'id')
+
+lewis.rf.fit <- randomForest(WeightedAverage ~ ., 
+             data = lewis.train, 
+             importance = TRUE)
+
+lewis.preds <- predict(lewis.rf.fit, lewis.test)
+RMSE(lewis.test$WeightedAverage, lewis.preds) # 0.3089867
+
+# put this exact modeling structure into a function
+quick.rf(lewis)
+
+```
+Cascade County, MT
+```{r}
+drought.cascade <- read.csv("USDM-30013-Cascade-MT.csv")
+cascade <- clean.county.data("Montana", "Cascade", pdsi, drought.cascade)
+
+quick.rf(cascade)
+```
+
+Grady County, OK
+```{r}
+drought.grady <- read.csv("USDM-40051-Grady-OK.csv")
+grady <- clean.county.data("Oklahoma", "Grady", pdsi, drought.grady)
+
+quick.rf(grady)
+```
+
+Hennepin County, MN
+```{r}
+drought.henn <- read.csv("USDM-27053-Hennepin-MN.csv")
+henn <- clean.county.data("Minnesota", "Hennepin", pdsi, drought.henn)
+
+quick.rf(henn)
+```
+
+Testing Arizona as a whole state
+```{r}
+usdm.az <- read.csv("USDM-Arizona.csv")
+az <- clean.state.data("Arizona", pdsi, usdm.az)
+
+crop.state.pdsi("Arizona", pdsi)
+quick.rf(az)
+
+```
+
