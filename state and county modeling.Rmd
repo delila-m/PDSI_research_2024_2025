@@ -119,8 +119,10 @@ az.counties <- c("Apache", "Cochise", "Coconino", "Gila",
             "Graham", "Greenlee", "La Paz", "Maricopa",
             "Mohave", "Navajo", "Pima", "Pinal", 
             "Santa Cruz", "Yavapai", "Yuma")
-# create list of az data to store
-AZ.data <- list()
+# create df to store the data from AZ
+AZ.data <- data.frame(county = character(), 
+                      actual = numeric(),
+                      predicted = numeric())
 
 # loop through each county 
 for (index in seq_along(az.counties)){
@@ -133,59 +135,19 @@ for (index in seq_along(az.counties)){
   # read in the data
   drought.data <- read.csv(file.name)
   
-  # process and save to list 
-  AZ.data[[county.name]] <- clean.county.data("Arizona", county.name, pdsi, drought.data)
+  # processing 
+  clean.data <- clean.county.data("Arizona", county.name, pdsi, drought.data)  
+  
+  # process and save 
+  results <- quick.rf(clean.data)
+  
+  # store the county results with the county name 
+  county.results <- data.frame(county = county.name,
+                               actual = results$test,
+                               predicted = results$predictions)
+  # bind the results to the big dataset
+  AZ.data <- rbind(county.results, AZ.data)
 }
-
+#save(AZ.data, file = "AZpreds.RData")
 #head(AZ.data)
 ```
-
-```{r}
-set.seed(1)
-
-# Loop through each county in AZ.data
-for (county_name in names(AZ.data)) {
-  # Extract the data for the county
-  county_data <- AZ.data[["Pima"]]
-  
-  # split into training and testing 
-  train <- county_data %>% sample_frac(0.80)
-  test <- anti_join(county_data, train, by = 'id')
-  
-  # save the testing weighted average values for comparison
-  test_y <- test %>% select(WeightedAverage)
-  
-  # build model
-  rf.fit <- randomForest(WeightedAverage ~ ., 
-                               data = train, 
-                               importance = TRUE)
-  
-  # predict and find RMSE
-  preds <- predict(rf.fit, test)
-  
-  # Predict on testing set
-  predictions <- predict(rf_model, newdata = test_x)
-  
-  
-  # code from chatgpt from here on 
-  
-  # Store results
-  results[[county_name]] <- data.frame(
-    actual = test_y,
-    predicted = predictions
-  )
-}
-
-# Combine results for all counties into a single data frame
-combined_results <- do.call(rbind, lapply(names(results), function(county_name) {
-  cbind(
-    county = county_name,
-    results[[county_name]]
-  )
-}))
-
-# Display combined results
-head(combined_results)
-
-```
-
