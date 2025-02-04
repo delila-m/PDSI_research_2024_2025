@@ -8,17 +8,19 @@ output: pdf_document
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 source("C:/Users/delil/Desktop/Fall 2024/Research 2024/Data/Preliminary_modeling/drought_functions.R")
+# source("C:/Users/delil/Desktop/Fall 2024/Research 2024/Data/Preliminary_modeling/getUSDMCountyData.R")
 ```
 
 Loading in the pdsi data
 ```{r}
 pdsi <- rast("agg_met_pdsi_1979_CurrentYear_CONUS.nc")
+class(pdsi)
 ```
 
 Pima County, AZ
 ```{r}
 set.seed(1)
-drought.az.pima <- read.csv("USDM-Pima.csv")
+drought.az.pima <- read.csv("C:/Users/delil/Desktop/Fall 2024/Research 2024/Data/Preliminary_modeling/AZ_Counties/USDM-04019.csv")
 pima <- clean.county.data("Arizona", "Pima", pdsi, drought.az.pima)
 
 # model with single training and testing set
@@ -71,7 +73,9 @@ Cascade County, MT
 drought.cascade <- read.csv("USDM-30013-Cascade-MT.csv")
 cascade <- clean.county.data("Montana", "Cascade", pdsi, drought.cascade)
 
-quick.rf(cascade)
+results <- quick.rf(cascade)
+
+
 ```
 
 Grady County, OK
@@ -106,7 +110,7 @@ Testing Arizona as a whole state: Fips Codes
 4023-Santa Cruz
 4025-Yavapai
 
-What I worked on shortly after Meeting on 1/22 as a brute fore attempt at getting all of the county data for AZ.  
+What I worked on shortly after Meeting on 1/22 as a brute fore attempt at getting all of the data for AZ.  
 ```{r}
 set.seed(1)
 
@@ -120,9 +124,9 @@ az.counties <- c("Apache", "Cochise", "Coconino", "Gila",
             "Mohave", "Navajo", "Pima", "Pinal", 
             "Santa Cruz", "Yavapai", "Yuma")
 # create df to store the data from AZ
-AZ.data <- data.frame(county = character(), 
-                      actual = numeric(),
-                      predicted = numeric())
+AZ.data <- data.frame(County = character(), 
+                      Actual = numeric(),
+                      Predicted = numeric())
 
 # loop through each county 
 for (index in seq_along(az.counties)){
@@ -138,16 +142,166 @@ for (index in seq_along(az.counties)){
   # processing 
   clean.data <- clean.county.data("Arizona", county.name, pdsi, drought.data)  
   
+  # save the cleaned data for documentation
+  filepath <- paste0("C:/Users/delil/Desktop/Fall 2024/Research 2024/Data/CleanedAzData/cleaned", county.name, ".RData" )
+  save(clean.data, file = filepath)
+  
   # process and save 
   results <- quick.rf(clean.data)
   
   # store the county results with the county name 
-  county.results <- data.frame(county = county.name,
-                               actual = results$test,
-                               predicted = results$predictions)
+  county.results <- data.frame(County = county.name,
+                               Actual = results$test,
+                               Predicted = results$predictions)
   # bind the results to the big dataset
   AZ.data <- rbind(county.results, AZ.data)
 }
 #save(AZ.data, file = "AZpreds.RData")
 #head(AZ.data)
 ```
+
+
+Creating visualization to use for abstract
+
+First just plot the actual versus predicted to see their relationship.
+```{r}
+
+# 'interactive' aspect from chatgpt, looks cool but not super useful for abstract
+library(plotly)
+
+p <- ggplot(AZ.data, aes(x = actual, y = predicted, color = county)) +
+  geom_point(alpha = 0.6, size = 2) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "black") +
+  labs(
+    title = "Interactive Predicted vs. Actual Values by County",
+    x = "Actual",
+    y = "Predicted"
+  ) +
+  theme_minimal()
+
+ggplotly(p)
+
+```
+
+
+A biplot 
+```{r}
+ggplot(AZ.data, aes(x = actual, y = predicted, color = county)) +
+  geom_point(alpha = 0.6, size = 2) +
+  geom_smooth(method = "lm", se = FALSE) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "black") +
+  labs(
+    title = "USDM Prediction Trends by County in Arizona",
+    x = "Actual USDM",
+    y = "Predicted USDM"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "right")
+
+```
+
+colorblind in r will help with colors
+change opaqueness in the lines 
+bold axes
+```{r}
+# Using viridis
+library(viridis)
+ggplot(AZ.data, aes(x = Actual, y = Predicted, color = County)) +
+  geom_smooth(method = "lm", se = FALSE, alpha = 0.3) +
+  geom_abline(slope = 1, intercept = 0, color = "black", alpha = 0.3) +
+  geom_point(alpha = 0.6, size = 2) +
+  scale_color_viridis_d() +  # 'd' for discrete colors
+  labs(
+    title = "USDM Prediction Trends by County in Arizona",
+    x = "Actual USDM",
+    y = "Predicted USDM"
+  ) +
+  theme_minimal() +
+  theme(
+    legend.position = "bottom",
+    plot.title = element_text(hjust = 0.5, face = "bold"),
+    axis.title = element_text(face = "bold"),
+    axis.text = element_text(face = "bold"),
+    axis.line = element_line(linewidth = 1)
+  )
+
+# OR using RColorBrewer
+library(RColorBrewer)
+# Replace scale_color_viridis_d() with:
+scale_color_brewer(palette = "Set2")  # Set2 is colorblind-friendly
+
+# OR using colorspace
+library(colorspace)
+# Replace scale_color_viridis_d() with:
+scale_color_discrete_qualitative(palette = "Colorblind")
+```
+
+```{r}
+ggsave("C:/Users/delil/Desktop/Fall 2024/Research 2024/Data/Preliminary_modeling/biplot.png")
+```
+
+
+Boxplot of prediction errors 
+```{r}
+AZ.data$error <- (AZ.data$predicted - AZ.data$actual
+
+ggplot(AZ.data, aes(x = county, y = error, fill = county)) +
+  geom_boxplot(alpha = 0.6) +
+  labs(
+    title = "Prediction Errors by County",
+    x = "County",
+    y = "Error (Predicted - Actual)"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
+
+I like the look of the biplot but it's a but confusing because there are so many counties, here I try to break apart the counties into a few plots for easier readability. 
+```{r}
+# break the counties into 4 groups using the list of counties above
+county.groups <- split(az.counties, ceiling(seq_along(az.counties) / 
+                                          (length(az.counties) / 4 )))
+
+#loop across the county groups and create basically the same plot 
+for(index in seq_along(county.groups)){
+  
+  # subset the data to grap the counties in one group
+  county.subset <- AZ.data[AZ.data$county %in% county.groups[[index]], ]
+  # same plot as before 
+  plot <- ggplot(county.subset, aes(x = actual, y = predicted, color = county)) +
+  geom_point(alpha = 0.6, size = 2) +
+  geom_smooth(method = "lm", se = FALSE, linetype = "dotted") +
+  geom_abline(slope = 1, intercept = 0, color = "black") +
+  labs(
+    title = "Prediction Trends by Arizona County",
+    x = "Actual USDM",
+    y = "Predicted USDM"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "right")
+  
+  print(plot)
+}
+```
+
+calculating rmse
+```{r}
+AZ.data$SE <- ((AZ.data$Actual - AZ.data$Predicted)^2)
+sqrt(mean(AZ.data$SE))
+```
+
+plotting pdsi
+```{r}
+oneDay <- pdsi %>% filter(category_day=36538)
+
+ggplot(pdsi) +
+  geom_spatraster(aes(x=x, y=y, fill = 'category_day=36538')) +
+  scale_fill_viridis_c() +
+    theme_void() +
+  labs(title = 'US PDSI data from 1/15/200') +
+    theme(legend.position = "bottom")
+```
+
+
+
