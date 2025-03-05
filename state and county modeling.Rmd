@@ -442,28 +442,21 @@ countryfips <- read.csv("All Counties and FIPS codes.csv")
 contUs <- filter(countryfips, ! State %in% c("AK","HI","PR"))
 
 # loop through each county 
-for (index in seq_along(az.counties)){
-  county.name <- az.counties[index]
-  fips <- az.fips[index]
+for (index in seq_along(contUs)){
+  county.name <- contUs$Area[index]
+  state.name <- contUS$State[index]
+  fips <- az.fips$AOI.Value[index]
   
   # get the file name 
-  file.name <- paste0("C:/Users/delil/Desktop/Fall 2024/Research 2024/Data/Preliminary_modeling/AZ_Counties/USDM-", fips, ".csv")
+  file.name <- paste0("C:\Users\dgm239\Downloads\Research_2025\PDSI_research_2024\countyData/USDM-", fips, ".csv")
   
   # read in the data
   drought.data <- read.csv(file.name)
   
   # processing 
-  clean.data <- clean.county.data("Arizona", county.name, pdsi, drought.data, TRUE)  
+  clean.data <- clean.county.data(state.name, county.name, pdsi, drought.data, TRUE)  
   
-  ########
-  # sample a small amount of the data to make the set more manageable 
-  #clean.data <- clean.data %>% sample_frac(0.0005) # consider using two stage sampling here instead?
-  
-  
-  #clean.data <- clean.data %>% mutate(County = county.name) %>% 
-    #select( c("USDM_Avg", "PDSI", "County", "x", "y", "Date"))
-
-  
+  # add all of the data together
   az.data <- rbind(az.data, clean.data)
   
 }
