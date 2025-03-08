@@ -422,9 +422,9 @@ importance(rf.county.az) #
 
 Testing
 ```{r}
-coconino.drought <- read.csv("C:/Users/delil/Desktop/Fall 2024/Research 2024/Data/Preliminary_modeling/AZ_Counties/USDM-04005.csv")
+coconino.drought <- read.csv("countyData/USDM-04005.csv")
 
-coconino <- clean.county.data("Arizona", "Coconino", pdsi, 
+coconino <- clean.county.data("AZ", "Coconino", pdsi, 
                               coconino.drought, TRUE)
 
 cocotest <- coconino %>% sample_frac(0.003)
@@ -435,31 +435,3 @@ coconinotest <- coconino %>% group_by(cell) %>%
             y_Avg = mean(y, na.rm = TRUE), 
             USDM_Avg = mean(USDM_Avg, na.rm = TRUE))
 ```
-
-First attempt at extracting the whole country
-```{r}
-countryfips <- read.csv("All Counties and FIPS codes.csv")
-contUs <- filter(countryfips, ! State %in% c("AK","HI","PR"))
-
-# loop through each county 
-for (index in seq_along(contUs)){
-  county.name <- contUs$Area[index]
-  state.name <- contUS$State[index]
-  fips <- az.fips$AOI.Value[index]
-  
-  # get the file name 
-  file.name <- paste0("C:\Users\dgm239\Downloads\Research_2025\PDSI_research_2024\countyData/USDM-", fips, ".csv")
-  
-  # read in the data
-  drought.data <- read.csv(file.name)
-  
-  # processing 
-  clean.data <- clean.county.data(state.name, county.name, pdsi, drought.data, TRUE)  
-  
-  # add all of the data together
-  az.data <- rbind(az.data, clean.data)
-  
-}
-```
-
-
