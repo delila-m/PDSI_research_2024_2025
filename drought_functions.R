@@ -10,12 +10,14 @@ library(randomForest)
 library(caret)
 
 
-
+# This is an internal function used in the bin.lat.long function
+# This function rounds the decimal given in the grid.size argument 
+# to make the number compatible with binning
 round.to.nearest <- function(x,nearest){
   rounded <- round(x/nearest) * nearest
   return(rounded)
-  
 }
+
 # This function takes a cleaned county dataset with columns of USDM_Avg, 
 # PDSI, x, y, and date. It bins the lat/long coordinates into the nearest 0.1
 # degree as default, but can be changes to whatever degree you want to round to. 
