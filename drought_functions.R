@@ -10,6 +10,49 @@ library(randomForest)
 library(caret)
 
 
+# This function reads in the continental US data, cleans it, 
+  # and bins the data to the nearest degree given. 
+  # It was intended to be used with the future function, to iterate over a df containing lists of county names
+# future function 
+bin.state.data <- function(state.fips, LocationFactor = TRUE, nearest.degree){
+  pdsi <- rast("agg_met_pdsi_1979_CurrentYear_CONUS.nc")
+  
+  # initialize data frame to hold cleaned state data
+  state.data <- data.frame()
+  
+  # loop through all of the counties in the state
+  for(index in 1:nrow(state.fips)){
+    
+    # grab the state, county, and fips code 
+    county.name <- state.fips$AreaClean[index]
+    state.name <- state.fips$State[index]
+    fips <- state.fips$AOI.Value[index]
+    
+    # get the file name
+    file.name <- paste0("countyData/USDM-", fips, ".csv")
+    
+    # read in the data
+    drought.data <- read.csv(file.name)
+    
+    # processing
+    clean.data <- clean.county.data(state.name, county.name, pdsi, drought.data, LocationFactor)
+    
+    # add state and county column for identification 
+    clean.data <- clean.data %>% mutate(State = state.name,
+                                        County = county.name)
+    
+    # bin data to the nearest .25 degree of lat/long
+    binned.state <- bin.lat.long(clean.data, nearest.degree)
+    
+    
+    # add all of the data together
+    state.data <- rbind(binned.state, state.data)
+  }
+  saveRDS(state.data,file = paste(state.name,".RDS"))
+  return(state.data)
+}
+
+
 # This is an internal function used in the bin.lat.long function
 # This function rounds the decimal given in the grid.size argument 
 # to make the number compatible with binning

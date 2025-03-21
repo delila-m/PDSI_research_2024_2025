@@ -24,37 +24,121 @@ contUS <- contUS %>%
       str_detect(Area, " Parish$") ~ str_replace(Area, " Parish$", ""),
       str_detect(Area, " City$") ~ str_replace(Area, " City$", ""),
       # Default case - keep original
-      TRUE ~ Area
-    )
+      TRUE ~ Area), 
+    AreaClean = str_trim(AreaClean)
   )
 
-# initialize data frame 
-usa.data <- data.frame()
+# # initialize data frame
+# usa.data <- data.frame()
+# 
+# # loop through each county
+# for (index in 1:nrow(contUS)){
+#   county.name <- contUS$AreaClean[index]
+#   state.name <- contUS$State[index]
+#   fips <- contUS$AOI.Value[index]
+# 
+#   # get the file name
+#   file.name <- paste0("countyData/USDM-", fips, ".csv")
+# 
+#   # read in the data
+#   drought.data <- read.csv(file.name)
+# 
+#   # processing
+#   clean.data <- clean.county.data(state.name, county.name, pdsi, drought.data, TRUE)
+# 
+#   # add state and county column for identification
+#   clean.data <- clean.data %>% mutate(State = state.name,
+#                                       County = county.name)
+# 
+#   # add all of the data together
+#   usa.data <- rbind(usa.data, clean.data)
+# }
+# 
+# 
+# # got through 4 counties in Montana, then quit bc the dataset was too big
+# filtered.usa <- usa.data %>% filter(State != "MT")
+# binned.usa <- bin.lat.long(filtered.usa, 0.25)
+# 
 
-# loop through each county 
-for (index in 1:nrow(contUS)){
-  county.name <- contUS$AreaClean[index]
-  state.name <- contUS$State[index]
-  fips <- contUS$AOI.Value[index]
 
-  # get the file name
-  file.name <- paste0("countyData/USDM-", fips, ".csv")
 
-  # read in the data
-  drought.data <- read.csv(file.name)
-
-  # processing
-  clean.data <- clean.county.data(state.name, county.name, pdsi, drought.data, TRUE)
-
-  # add state and county column for identification 
-  clean.data <- clean.data %>% mutate(State = state.name,
-                                      County = county.name)
+# future function 
+bin.state.data <- function(state.fips, LocationFactor = TRUE){
+  pdsi <- rast("agg_met_pdsi_1979_CurrentYear_CONUS.nc")
   
-  # add all of the data together
-  usa.data <- rbind(usa.data, clean.data)
+  # initialize data frame to hold cleaned state data
+  state.data <- data.frame()
+  
+  # loop through all of the counties in the state
+  for(index in 1:nrow(state.fips)){
+    
+    # grab the state, county, and fips code 
+    county.name <- state.fips$AreaClean[index]
+    state.name <- state.fips$State[index]
+    fips <- state.fips$AOI.Value[index]
+    
+    # get the file name
+    file.name <- paste0("countyData/USDM-", fips, ".csv")
+    
+    # read in the data
+    drought.data <- read.csv(file.name)
+    
+    # processing
+    clean.data <- clean.county.data(state.name, county.name, pdsi, drought.data, LocationFactor)
+    
+    # add state and county column for identification 
+    clean.data <- clean.data %>% mutate(State = state.name,
+                                        County = county.name)
+    
+    # bin data to the nearest .25 degree of lat/long
+    binned.state <- bin.lat.long(clean.data, 0.25)
+    
+    
+    # add all of the data together
+    state.data <- rbind(binned.state, state.data)
+  }
+  saveRDS(state.data,file = paste(state.name,".RDS"))
+  return(state.data)
 }
 
-# save full dataset
 
 
-# bin data to the nearest degree of latitude 
+#####################################
+# new filtering loop 
+
+states <- unique(contUS$State)
+state.fips <- vector(mode = "list",length = length(states))
+# loop through continental US states
+for(index in seq_along(states)){
+  
+  # filter for just the state's data
+  state.fips[[index]] <- contUS %>% filter(State == states[index])
+  
+  # # bin each county in the state and combine to df using our function 
+  # binned.state <- bin.state.data(state.fips, pdsi, true)
+  # 
+  # # save state ?
+  # savefilename <- paste0(state.name, "_Binned.csv")
+  # write_csv(binned.state, file = savefilename)
+  
+  # add to US data frame?
+  
+}
+
+
+
+# Run in furrr ------------------------------------------------------------
+library(future)
+library(furrr)
+future::plan(strategy = multisession, workers = 6)
+
+allStates <- furrr::future_map(state.fips,bin.state.data,pdsi,.progress = TRUE)
+
+
+
+
+
+
+
+
+

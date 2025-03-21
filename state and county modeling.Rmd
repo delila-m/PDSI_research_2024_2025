@@ -427,6 +427,8 @@ coconino.drought <- read.csv("countyData/USDM-04005.csv")
 coconino <- clean.county.data("AZ", "Coconino", pdsi, 
                               coconino.drought, TRUE)
 
+binned <- bin.lat.long(coconino, 0.25)
+
 cocotest <- coconino %>% sample_frac(0.003)
 
 coconinotest <- coconino %>% group_by(cell) %>% 
