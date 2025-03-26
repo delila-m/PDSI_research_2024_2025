@@ -97,7 +97,7 @@ allStatesDf <- readRDS("CleanedUS_1.RDS")
 
 # filter for west-coast data only 
 westUS <- allStatesDf %>% filter(bin.x <= -100)
-
+# take sample fraction bc it's still too big 
 subsetWest <- westUS %>% sample_frac(0.50)
 
 # rf modeling 
@@ -115,6 +115,7 @@ rf.caret.fit <- train(USDM_Avg ~ PDSI_Avg + bin.x + bin.y,
                 method = "rf", 
                 ntree = 50,
                 trControl = ctrl)
+
 # using ranger does not work :(
 # library(ranger)
 # 
