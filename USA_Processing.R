@@ -115,19 +115,19 @@ rf.caret.fit <- train(USDM_Avg ~ PDSI_Avg + bin.x + bin.y,
                 method = "rf", 
                 ntree = 50,
                 trControl = ctrl)
-# using ranger 
-library(ranger)
-
-rf.ranger.fit <- ranger(
-  formula = USDM_Avg ~ PDSI_Avg + bin.x + bin.y,  # Formula specifying the target and predictors
-  data = train,  # Training dataset
-  num.trees = 100,  # Number of trees in the forest
-  mtry = 2,  # Number of features to consider at each split
-  classification = TRUE,  # Specify that it's a classification problem
-  importance = 'impurity',  # To measure feature importance
-  probability = TRUE,  # To get probabilities for each class
-  verbose = TRUE
-  )
+# using ranger does not work :(
+# library(ranger)
+# 
+# rf.ranger.fit <- ranger(
+#   formula = USDM_Avg ~ PDSI_Avg + bin.x + bin.y,  # Formula specifying the target and predictors
+#   data = train,  # Training dataset
+#   num.trees = 100,  # Number of trees in the forest
+#   mtry = 2,  # Number of features to consider at each split
+#   classification = TRUE,  # Specify that it's a classification problem
+#   importance = 'impurity',  # To measure feature importance
+#   probability = TRUE,  # To get probabilities for each class
+#   verbose = TRUE
+#   )
 
 # predict and find RMSE
 preds <- predict(rf.fit, test)
