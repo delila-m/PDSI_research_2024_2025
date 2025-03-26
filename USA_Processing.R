@@ -4,6 +4,7 @@ setwd("C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024")
 # load in necessary libraries
 source("drought_functions.R")
 
+
 # load in PDSI data for whole country
 pdsi <- rast("agg_met_pdsi_1979_CurrentYear_CONUS.nc")
 
@@ -61,50 +62,8 @@ contUS <- contUS %>%
 # 
 
 
-
-# future function 
-bin.state.data <- function(state.fips, LocationFactor = TRUE){
-  pdsi <- rast("agg_met_pdsi_1979_CurrentYear_CONUS.nc")
-  
-  # initialize data frame to hold cleaned state data
-  state.data <- data.frame()
-  
-  # loop through all of the counties in the state
-  for(index in 1:nrow(state.fips)){
-    
-    # grab the state, county, and fips code 
-    county.name <- state.fips$AreaClean[index]
-    state.name <- state.fips$State[index]
-    fips <- state.fips$AOI.Value[index]
-    
-    # get the file name
-    file.name <- paste0("countyData/USDM-", fips, ".csv")
-    
-    # read in the data
-    drought.data <- read.csv(file.name)
-    
-    # processing
-    clean.data <- clean.county.data(state.name, county.name, pdsi, drought.data, LocationFactor)
-    
-    # add state and county column for identification 
-    clean.data <- clean.data %>% mutate(State = state.name,
-                                        County = county.name)
-    
-    # bin data to the nearest .25 degree of lat/long
-    binned.state <- bin.lat.long(clean.data, 0.25)
-    
-    
-    # add all of the data together
-    state.data <- rbind(binned.state, state.data)
-  }
-  saveRDS(state.data,file = paste(state.name,".RDS"))
-  return(state.data)
-}
-
-
-
 #####################################
-# new filtering loop 
+# cleaning the US county data
 
 states <- unique(contUS$State)
 state.fips <- vector(mode = "list",length = length(states))
@@ -114,17 +73,9 @@ for(index in seq_along(states)){
   # filter for just the state's data
   state.fips[[index]] <- contUS %>% filter(State == states[index])
   
-  # # bin each county in the state and combine to df using our function 
-  # binned.state <- bin.state.data(state.fips, pdsi, true)
-  # 
-  # # save state ?
-  # savefilename <- paste0(state.name, "_Binned.csv")
-  # write_csv(binned.state, file = savefilename)
-  
-  # add to US data frame?
-  
 }
 
+# saveRDS(state.fips, file = "CleanStateFips.RDS")
 
 
 # Run in furrr ------------------------------------------------------------
@@ -132,13 +83,59 @@ library(future)
 library(furrr)
 future::plan(strategy = multisession, workers = 6)
 
-allStates <- furrr::future_map(state.fips,bin.state.data,pdsi,.progress = TRUE)
+allStates <- furrr::future_map(state.fips,bin.state.data,TRUE, 1, .progress = TRUE)
+
+allStatesDf <- list_rbind(allStates)
+
+saveRDS(allStatesDf, file = "CleanedUS_1.RDS")
+
+######
+# loading in data
+setwd("C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/CleanedUS_1")
+
+allStatesDf <- readRDS("CleanedUS_1.RDS")
+
+# filter for west-coast data only 
+westUS <- allStatesDf %>% filter(bin.x <= -100)
+
+subsetWest <- westUS %>% sample_frac(0.50)
+
+# rf modeling 
+# split into training and testing 
+train <- subsetWest %>% sample_frac(0.80)
+test <- anti_join(subsetWest , train)
+
+# using caret
+library(caret)
+
+ctrl <- trainControl(method = "cv", number = 5, verboseIter = TRUE)
+
+rf.caret.fit <- train(USDM_Avg ~ PDSI_Avg + bin.x + bin.y, 
+                data = train,
+                method = "rf", 
+                ntree = 50,
+                trControl = ctrl)
+# using ranger 
+library(ranger)
+
+rf.ranger.fit <- ranger(
+  formula = USDM_Avg ~ PDSI_Avg + bin.x + bin.y,  # Formula specifying the target and predictors
+  data = train,  # Training dataset
+  num.trees = 100,  # Number of trees in the forest
+  mtry = 2,  # Number of features to consider at each split
+  classification = TRUE,  # Specify that it's a classification problem
+  importance = 'impurity',  # To measure feature importance
+  probability = TRUE,  # To get probabilities for each class
+  verbose = TRUE
+  )
+
+# predict and find RMSE
+preds <- predict(rf.fit, test)
 
 
+RMSE(preds, test$USDM_Avg)
 
 
-
-
-
-
+ggplot(allStatesDf, aes(x=Date, y=PDSI_Avg))+
+  geom_point()
 
