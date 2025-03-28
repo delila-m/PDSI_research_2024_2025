@@ -67,15 +67,17 @@ contUS <- contUS %>%
 
 states <- unique(contUS$State)
 state.fips <- vector(mode = "list",length = length(states))
+allStatesDf25 <- data.frame()
 # loop through continental US states
 for(index in seq_along(states)){
   
   # filter for just the state's data
-  state.fips[[index]] <- contUS %>% filter(State == states[index])
-  
+  #state.fips[[index]] <- contUS %>% filter(State == states[index])
+  state <- readRDS(paste0(states[index], " .RDS"))
+  allStatesDf25 <- rbind(allStatesDf25, state)
 }
 
-# saveRDS(state.fips, file = "CleanStateFips.RDS")
+saveRDS(allStatesDf25, file = "CleanedUS_0.25.RDS")
 
 
 # Run in furrr ------------------------------------------------------------
@@ -95,48 +97,143 @@ setwd("C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/CleanedUS_1")
 
 allStatesDf <- readRDS("CleanedUS_1.RDS")
 
-# filter for west-coast data only 
-westUS <- allStatesDf %>% filter(bin.x <= -100)
-# take sample fraction bc it's still too big 
-subsetWest <- westUS %>% sample_frac(0.50)
+# # filter for west-coast data only 
+# westUS <- allStatesDf %>% filter(bin.x <= -100)
+# # take sample fraction bc it's still too big 
+# subsetWest <- westUS %>% sample_frac(0.50)
 
 # rf modeling 
 # split into training and testing 
-train <- subsetWest %>% sample_frac(0.80)
-test <- anti_join(subsetWest , train)
+train <- allStatesDf %>% sample_frac(0.80)
+test <- anti_join(allStatesDf , train)
 
-# using caret
-library(caret)
 
-ctrl <- trainControl(method = "cv", number = 5, verboseIter = TRUE)
-
-rf.caret.fit <- train(USDM_Avg ~ PDSI_Avg + bin.x + bin.y, 
-                data = train,
-                method = "rf", 
-                ntree = 50,
-                trControl = ctrl)
-
-# using ranger does not work :(
+# using ranger
 library(ranger)
 
 rf.ranger.fit <- ranger(
   formula = USDM_Avg ~ PDSI_Avg + bin.x + bin.y,  # Formula specifying the target and predictors
   data = train,  # Training dataset
-  num.trees = 50,  # Number of trees in the forest
+  num.trees = 100,  # Number of trees in the forest
   mtry = 2,  # Number of features to consider at each split
   importance = 'permutation',  # To measure feature importance
-  probability = TRUE,  # To get probabilities for each class
   verbose = TRUE, 
-  local.importance = TRUE 
+  local.importance = TRUE,
+  quantreg = TRUE
   )
 
+# perhaps three iterations of tests of the training set?
+importance <- rf.ranger.fit$variable.importance.local
+### trying to make sense of importance values 
+# Check the dimensions and structure
+dim(rf.ranger.fit$variable.importance.local)
+str(rf.ranger.fit$variable.importance.local)
+
+# Check the number of rows in your training data
+nrow(train)
+
+# Compare with the length of the importance object
+length(rf.ranger.fit$variable.importance.local)
+
+
+# predict 
+preds.ranger <- predict(rf.ranger.fit, test)
+
+
+# Add predictions to your test dataset
+test$predicted <- preds.ranger$predictions
+
+
+# general RMSE, and rmse for each observation 
+RMSE(preds.ranger$predictions, test$USDM_Avg) # 0.5687996!!!
+
+# calculate absolute error and squared error for each observation
+test.binned <- test %>% group_by(bin.x, bin.y) %>% 
+  summarise(MAE = mean(Abs_Error), 
+            MSE = mean(Sq_Error),
+            RMSE = sqrt(MSE), 
+            .groups = 'drop')
+
+
+# save fit object, traing set, testing set, and predictions
+save(rf.ranger.fit, train, test, preds.ranger, file = "RFAnalysis1.Rdata")
+
+################ # plot some stuff
+
+# load in the rf objects
+setwd("C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/CleanedUS_1")
+load("RFAnalysis1.Rdata")
+
+library(viridis)  
+library(ggplot2)
+library(metR)
+
+
+ggplot(test.binned, aes(x = bin.x, y = bin.y, z = MSE)) +
+  geom_contour_fill() +  # Interpolated filled contours
+  scale_fill_viridis(name = "Absolute Error") +
+  theme_minimal() +
+  labs(title = "Prediction Error Across Continental US",
+       x = "Longitude", 
+       y = "Latitude")
+
+
+# Option 1: Using geom_tile() for a heatmap
+ggplot(test.binned, aes(x = bin.x, y = bin.y, fill = RMSE)) +
+  geom_tile() +
+  scale_fill_viridis_c(name = "Mean Squared Error") +
+  theme_minimal() +
+  labs(title = "Prediction Error Across Continental US",
+       x = "Longitude Bin", 
+       y = "Latitude Bin")
+
+# Option 2: Using geom_raster() which can be faster for large datasets
+ggplot(test.binned, aes(x = bin.x, y = bin.y, fill = MSE)) +
+  geom_raster(interpolate = TRUE) +
+  scale_fill_viridis_c(name = "Mean Squared Error") +
+  theme_minimal() +
+  labs(title = "Prediction Error Across Continental US",
+       x = "Longitude Bin", 
+       y = "Latitude Bin")
+
+
+###### Trying the model again with elevation as a predictor
+
+
+####### trying model again without 2024..
+
+
+
+
+
+####################################
+# trying again at 0.25
+setwd("C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/CleanedUS_0.25")
+
+
+allStatesDf25 <- readRDS("CleanedUS_0.25.RDS")
+
+train25 <- allStatesDf25 %>% sample_frac(0.80)
+test25 <- anti_join(allStatesDf25, train25)
+
+
+rf.ranger.fit.25 <- ranger(
+  formula = USDM_Avg ~ PDSI_Avg + bin.x + bin.y,  # Formula specifying the target and predictors
+  data = train25,  # Training dataset
+  num.trees = 100,  # Number of trees in the forest
+  mtry = 2,  # Number of features to consider at each split
+  importance = 'permutation',  # To measure feature importance
+  verbose = TRUE, 
+  local.importance = TRUE,
+  quantreg = TRUE
+)
+
+# perhaps three iterations of tests of the training set?
+importance25 <- rf.ranger.fit.25$variable.importance.local
+
 # predict and find RMSE
-preds <- predict(rf.fit, test)
+preds.ranger.25 <- predict(rf.ranger.fit.25, test25)
 
 
-RMSE(preds, test$USDM_Avg)
 
-
-ggplot(allStatesDf, aes(x=Date, y=PDSI_Avg))+
-  geom_point()
-
+RMSE(preds.ranger.25$predictions, test25$USDM_Avg)

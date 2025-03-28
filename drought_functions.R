@@ -106,29 +106,6 @@ crop.county.pdsi <- function(state, county, spat.us.pdsi, LocationFactor){ # cou
   return(pdsi.extracted)
 }
 
-# This function crops the pdsi file to the state level
-# Takes the desired state as strings, and a spatraster object containing pdsi data
-## note this raster file has to be loaded in using the rast function from the terra package
-crop.state.pdsi <- function(state, spat.us.pdsi, LocationFactor){ # state needs to be saved as a string
-  # get the shapefile for states
-  sf.state <- states(class = "sf") 
-  
-  # filter the appropriate state
-  state <- sf.state[sf.state$NAME == state, ]
-  
-  # if we want the x/y coordinates and cell numbers from PDSI measurements
-  if(LocationFactor){
-    pdsi.extracted <- terra::extract(spat.us.pdsi, county,
-                                     cells = TRUE, xy = TRUE) # creates a data frame
-  }
-  else{
-    # use extract function, cells and xy argument return the cell number and xy coordinates, respectively. 
-    # added to help with mapping visualizatona later on 
-    pdsi.extracted <- terra::extract(spat.us.pdsi, county) # creates a data frame
-  }
-  return(pdsi.extracted)
-}
-
 # This function normalizes the land area percentages for the US drought index
 # note this should be done before calculating the weighted averages
 normalize.usdm <- function(data){
@@ -305,30 +282,6 @@ clean.county.data <- function(state, county, spat.us.pdsi,
   
   # return the final cleaned dataset
   return(full.data)
-}
-
-# This function is broken and needs work 
-clean.state.data <- function(state, spat.us.pdsi, cropped.usdm.data){
-  # crop the pdsi data 
-  pdsi <- crop.state.pdsi(state, spat.us.pdsi)
-  
-  # clean the usdm data
-  normal.drought <- normalize.usdm(cropped.usdm.data)
-  weighted.drought <- usdm.weighted.average(normal.drought)
-  interpolated.drought <- interpolate.usdm(weighted.drought)
-  
-  # clean the pdsi data 
-  interpolated.pdsi <- interpolate.pdsi(pdsi)
-  
-  # join the datasets and reshaping 
-  full.data <- join.pdsi.usdm(interpolated.pdsi, interpolated.drought)
-  
-  # add an ID column 
-  full.data$id <- 1:nrow(full.data)
-  
-  # return the final cleaned dataset
-  return(full.data)
-  
 }
 
 # This function creates a random forest model, splitting the data into a training set, 
