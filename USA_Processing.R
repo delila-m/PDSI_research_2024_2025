@@ -7,6 +7,15 @@ library(tigris)
 library(patchwork)
 library(tidyverse)
 library(dplyr)
+library(xgboost)
+library(caret)
+library(sf)
+##
+setwd("C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024")
+# load in necessary libraries
+source("drought_functions.R")
+
+
 
 # Loading in Data, cleaning, and binning to nearest degree of lat/long
 #####
@@ -104,6 +113,8 @@ allStatesDf_0.5 <- list_rbind(allStates)
 saveRDS(allStatesDf_0.5, file = "CleanedUS_0.5.RDS")
 #####
 
+
+### RF Modeling
 
 # Running RF model on data binned to one degree
 ######
@@ -672,7 +683,7 @@ plot
 #####
 
 
-# leave out years with data binned to nearest degree
+# leave out years with data binned to nearest 0.5 degree
 #####
 
 setwd("C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/CleanedUS_0.5")
@@ -715,6 +726,278 @@ test.yearsplit.0.5$predictions <- preds.ranger.yearsplit.0.5$predictions
 save(rf.ranger.fit.yearsplit.0.5, train.yearsplit.0.5, test.yearsplit.0.5, preds.ranger.yearsplit.0.5, file = "RFAnalysisElev1YearSplit.Rdata")
 
 
+# general RMSE, and rmse for each observation 
+RMSE(preds.ranger.yearsplit.0.5$predictions, test.yearsplit.0.5$USDM_Avg) # 0.6701104!!!
+
+## bin training and testing sets based off lat/long values 
+
+# calculate absolute error and squared error for each observation
+test.binned <- test.yearsplit.0.5 %>% 
+  mutate(Abs_Error = abs(USDM_Avg - predictions), 
+         Sq_Error = (USDM_Avg - predictions)^2) %>% 
+  group_by(bin.x, bin.y) %>% 
+  summarise(MAE = mean(Abs_Error), 
+            MSE = mean(Sq_Error),
+            RMSE = sqrt(MSE), 
+            .groups = 'drop')
+
+# plotting MSE
+ggplot(test.binned, aes(x = bin.x, y = bin.y, fill = RMSE)) +
+  geom_tile() +
+  scale_fill_viridis_c(name = "Mean Squared Error") +
+  theme_minimal() +
+  labs(title = "Prediction Error Across Continental US",
+       x = "Longitude Bin", 
+       y = "Latitude Bin")
+
+# perhaps three iterations of tests of the training set?
+importance <- data.frame(rf.ranger.fit.yearsplit.0.5$variable.importance.local)
+train_ungrouped <- train.yearsplit.0.5 %>% ungroup()
+
+# Then add the importance columns
+train.importance <- train_ungrouped %>% 
+  mutate(
+    x.bin.importance = importance$bin.x, 
+    y.bin.importance = importance$bin.y, 
+    PDSI.importance = importance$PDSI_Avg,
+  )
+
+
+# bin training set by lat/long to look at importance
+train.binned <- train.importance %>% group_by(bin.x, bin.y) %>% 
+  summarise(Mean.binx.importance = mean(x.bin.importance), 
+            Mean.biny.importance = mean(y.bin.importance),
+            Mean.PDSI.importance = mean(PDSI.importance), 
+            .groups = 'drop')
+
+### Plotting variable importance 
+ggplot(train.binned, aes(x = bin.x, y = bin.y, fill = Mean.PDSI.importance)) +
+  geom_tile() +
+  scale_fill_viridis_c(name = "Mean PDSI Importance") +
+  theme_minimal() +
+  labs(title = "PDSI Importance Across Continental US",
+       x = "Longitude Bin", 
+       y = "Latitude Bin")
+
+ggplot(train.binned, aes(x = bin.x, y = bin.y, fill = Mean.binx.importance)) +
+  geom_tile() +
+  scale_fill_viridis_c(name = "Mean Longitude Importance") +
+  theme_minimal() +
+  labs(title = "Longitude Importance Across Continental US",
+       x = "Longitude Bin", 
+       y = "Latitude Bin")
+
+ggplot(train.binned, aes(x = bin.x, y = bin.y, fill = Mean.biny.importance)) +
+  geom_tile() +
+  scale_fill_viridis_c(name = "Mean Latitude Importance") +
+  theme_minimal() +
+  labs(title = "Latitude Importance Across Continental US",
+       x = "Longitude Bin", 
+       y = "Latitude Bin")
+
+# plot 2020 predictions vs actual
+
+# predict only 2020
+test.2020 <- test.yearsplit.0.5 %>% filter(Year == 2020)
+preds.2020 <- predict(rf.ranger.fit.yearsplit.0.5, test.2020)
+# add to test df for easy plotting 
+test.2020$preds <- preds.2020$predictions
+
+# create predicted and actual plots, add together and plot
+pred <- ggplot(test.2020, aes(x = bin.x, y = bin.y, fill = preds)) +
+  geom_tile() +
+  scale_fill_viridis_c(name = "USDM") +
+  theme_minimal() +
+  labs(title = "Predicted Average USDM Across Continental US for 2020",
+       x = "Longitude Bin", 
+       y = "Latitude Bin")
+
+actual <-  ggplot(test.2020, aes(x = bin.x, y = bin.y, fill = USDM_Avg)) +
+  geom_tile() +
+  scale_fill_viridis_c(name = "USDM") +
+  theme_minimal() +
+  labs(title = "Actual Average USDM Across Continental US for 2020",
+       x = "Longitude Bin", 
+       y = "Latitude Bin")
+
+plot <- pred + actual
+plot
+
+#####
+
+
+### XGBoost Modeling
+# trying xgboost at 1 degree
+#####
+setwd("C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/CleanedUS_1")
+
+allStatesDf_1 <- readRDS("CleanedUS_1.RDS")
+
+# split into training and testing 
+train_1 <- allStatesDf_1 %>% sample_frac(0.80)
+test_1 <- anti_join(allStatesDf_1, train_1)
+
+train_x = data.matrix(train_1 %>% select(-c(USDM_Avg, x_Avg, y_Avg, Date)))
+train_y = train_1 %>% select(USDM_Avg)
+train_y <- train_y %>% select(-c(bin.x, bin.y))
+
+#define predictor and response variables in testing set
+test_x = data.matrix(test_1 %>% select(-c(USDM_Avg, x_Avg, y_Avg, Date)))
+test_y = test_1 %>% select(USDM_Avg)
+
+#define final training and testing sets
+xgb_train = xgb.DMatrix(data = train_x, label = train_y$USDM_Avg)
+xgb_test = xgb.DMatrix(data = test_x, label = test_y$USDM_Avg)
+
+#defining a watchlist
+watchlist = list(train=xgb_train, test=xgb_test)
+
+#fit XGBoost model and display training and testing data at each iteartion
+model = xgb.train(data = xgb_train, max.depth = 3, 
+                  watchlist=watchlist, nrounds = 500, 
+                  verbose = TRUE)
+
+
+
+# different approach using caret
+grid_tune <- expand_grid(nrounds = c(500, 1000, 1500), 
+                         max_depth = c(2,4,6), 
+                         eta = 0.3, 
+                         gamma = 0, 
+                         colsample_bytree = 1, 
+                         min_child_weight = 1, 
+                         subsample = 1)
+
+train_ctrl <- trainControl(method = "cv", 
+                           number = 3, 
+                           verboseIter = TRUE, 
+                           allowParallel = TRUE)
+
+xgb_tune <-  train(x = train_x, 
+                   y = train_y$USDM_Avg, 
+                   trControl = train_ctrl, 
+                   tuneGrid = grid_tune, 
+                   method = "xgbTree", 
+                   verbose = TRUE)
+
+# look at the best model 
+xgb_tune$best
+# predict
+xgb.preds <- predict(xgb_tune, test_1)
+
+test_1$predicted <- xgb.preds
+save(xgb_tune, train_1, test_1, xgb.preds, file = "XGBAnalysis_1.RData")
+
+# general RMSE, and rmse for each observation 
+RMSE(xgb.preds, test_1$USDM_Avg) # 0.5602002!!!
+
+## bin training and testing sets based off lat/long values 
+
+# calculate absolute error and squared error for each observation
+test.binned <- test_1 %>% 
+  mutate(Abs_Error = abs(USDM_Avg - predicted), 
+         Sq_Error = (USDM_Avg - predicted)^2) %>% 
+  group_by(bin.x, bin.y) %>% 
+  summarise(MAE = mean(Abs_Error), 
+            MSE = mean(Sq_Error),
+            RMSE = sqrt(MSE), 
+            Mean_predicted = mean(predicted), 
+            Mean_USDM = mean(USDM_Avg),
+            .groups = 'drop')
+
+# plotting MSE
+ggplot(test.binned, aes(x = bin.x, y = bin.y, fill = RMSE)) +
+  geom_tile() +
+  scale_fill_viridis_c(name = "Mean Squared Error") +
+  theme_minimal() +
+  labs(title = "Prediction Error Across Continental US",
+       x = "Longitude Bin", 
+       y = "Latitude Bin")
+
+
+# creating plot of predicted vs actual USDM rating 
+# create predicted and actual plots, add together and plot
+pred <- ggplot(test.binned, aes(x = bin.x, y = bin.y, fill = Mean_predicted)) +
+  geom_tile() +
+  scale_fill_viridis_c(name = "USDM") +
+  theme_minimal() +
+  labs(title = "Predicted Average USDM Across Continental US for Testing set",
+       x = "Longitude Bin", 
+       y = "Latitude Bin")
+
+actual <-  ggplot(test.binned, aes(x = bin.x, y = bin.y, fill = Mean_USDM)) +
+  geom_tile() +
+  scale_fill_viridis_c(name = "USDM") +
+  theme_minimal() +
+  labs(title = "Actual Average USDM Across Continental US for Testing Set",
+       x = "Longitude Bin", 
+       y = "Latitude Bin")
+
+plot <- pred + actual
+plot
+# rmse and variance maps
+#####
+
+
+# trying an initial Xgboost model with data binned to 0.5 degree
+#####
+setwd("C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/CleanedUS_0.5")
+
+allStatesDf_0.5 <- readRDS("CleanedUS_0.5.RDS")
+
+# split into training and testing 
+train_0.5 <- allStatesDf_0.5 %>% sample_frac(0.80)
+test_0.5 <- anti_join(allStatesDf_0.5 , train_0.5)
+
+train_x = data.matrix(train_0.5 %>% select(-c(USDM_Avg, x_Avg, y_Avg, Date)))
+train_y = train_0.5 %>% select(USDM_Avg)
+train_y <- train_y %>% select(-c(bin.x, bin.y))
+
+#define predictor and response variables in testing set
+test_x = data.matrix(test_0.5 %>% select(-c(USDM_Avg, x_Avg, y_Avg, Date)))
+test_y = test_0.5 %>% select(USDM_Avg)
+
+#define final training and testing sets
+xgb_train = xgb.DMatrix(data = train_x, label = train_y$USDM_Avg)
+xgb_test = xgb.DMatrix(data = test_x, label = test_y$USDM_Avg)
+
+#defining a watchlist
+watchlist = list(train=xgb_train, test=xgb_test)
+
+#fit XGBoost model and display training and testing data at each iteartion
+model = xgb.train(data = xgb_train, max.depth = 3, 
+                  watchlist=watchlist, nrounds = 500, 
+                  verbose = TRUE)
+
+
+
+# different approach using caret
+grid_tune <- expand_grid(nrounds = c(500, 1000, 1500), 
+                         max_depth = c(2,4,6), 
+                         eta = 0.3, 
+                         gamma = 0, 
+                         colsample_bytree = 1, 
+                         min_child_weight = 1, 
+                         subsample = 1)
+
+train_ctrl <- trainControl(method = "cv", 
+                           number = 3, 
+                           verboseIter = TRUE, 
+                           allowParallel = TRUE)
+
+xgb_tune <-  train(x = train_x, 
+                 y = train_y$USDM_Avg, 
+                 trControl = train_ctrl, 
+                 tuneGrid = grid_tune, 
+                 method = "xgbTree", 
+                 verbose = TRUE)
+
+
+xbg_tune$best
+
+
+
+
 #####
 
 # create a plot of sd of USDM to see where the most variability in the US is
@@ -745,6 +1028,65 @@ ggplot(usdm_sd_by_location, aes(x = bin.x, y = bin.y, fill = USDM_SD)) +
   ) +
   coord_fixed() +
   theme(legend.position = "right")
+#####
+
+
+# create ts plots of USDM and PDSI to show their differences 
+#####
+
+pdsi <- rast("agg_met_pdsi_1979_CurrentYear_CONUS.nc")
+# tigris is not working for whatever reason
+pima.pdsi <- crop.county.pdsi("Arizona", "Pima", pdsi, TRUE) 
+  
+# Get the direct download URL
+# url <- tigris:::tigris_url("COUNTY", "2022")
+# Or use this specific URL for 2022 county data
+url <- "https://www2.census.gov/geo/tiger/TIGER2022/COUNTY/tl_2022_us_county.zip"
+
+# Set local filenames
+zip_file <- file.path(tempdir(), "counties.zip")
+unzip_dir <- file.path(tempdir(), "counties")
+
+# Download the file
+download.file(url, zip_file, mode = "wb", method = "auto")
+
+# Create directory and unzip manually
+dir.create(unzip_dir, showWarnings = FALSE, recursive = TRUE)
+unzip(zip_file, exdir = unzip_dir)
+
+# Read the shapefile
+counties_sf <- st_read(unzip_dir)
+
+# Filter for Arizona counties
+arizona_counties <- counties_sf[counties_sf$STATEFP == "04", ]
+
+pima <- arizona_counties[arizona_counties$NAME == "Pima", ]
+pdsi.data <- terra::extract(pdsi, pima,
+                                 cells = TRUE, xy = TRUE)
+# assign grid cell IDs
+pdsi.data$ID <- seq_len(nrow(pdsi.data))
+
+goodData <- select(pdsi.data, ID, cell, x, y,
+                   starts_with("daily_mean_palmer_drought_severity_index_day="))
+
+# get rid of of the long name
+allNames <- names(goodData)
+newNames <- str_remove(allNames,
+                       "daily_mean_palmer_drought_severity_index_day=")
+names(goodData) <- newNames
+
+goodLong <- pivot_longer(goodData, cols = -c(ID, x, y, cell),
+                         names_to = "Day", values_to = "PDSI") %>%
+  # deal with the date
+  mutate(
+    day = as.integer(Day),
+    Date = as.Date(day, origin = "1900-01-01"), # starting date
+    midPointDay = day - 2.5)
+
+
+
+
+
 #####
 
 

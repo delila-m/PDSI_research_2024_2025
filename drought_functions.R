@@ -10,10 +10,28 @@ library(randomForest)
 library(caret)
 
 
+# This fucntion bins elevation data to the nearest specified degree of latitude and longitude
+  # and created an average elevation for the binned area, in m
+bin.elevation.data <- function(raw.elevation.data, grid.size = 0.1){
+  
+  # bins the lat/long into whatever decimal place you wanted 
+  clean.data.binned <- raw.elevation.data %>% 
+    mutate(bin.x = round.to.nearest(x,nearest = grid.size),
+           bin.y = round.to.nearest(y,nearest = grid.size)) %>% 
+    # groups by the new bins and averages data for the new larger, binned gridcells
+    group_by(bin.x, bin.y) %>% 
+    summarise(Elev_Avg = mean(Elevation_m, na.rm = TRUE), 
+              x_Avg = mean(x, na.rm = TRUE), 
+              y_Avg = mean(y, na.rm = TRUE))
+  # retrn the cleaned, binned, data
+  return(clean.data.binned)      
+}
+
+
 # This function reads in the continental US data, cleans it, 
   # and bins the data to the nearest degree given. 
   # It was intended to be used with the future function, to iterate over a df containing lists of county names
-# future function 
+  # future function 
 bin.state.data <- function(state.fips, LocationFactor = TRUE, nearest.degree){
   pdsi <- rast("agg_met_pdsi_1979_CurrentYear_CONUS.nc")
   
@@ -44,7 +62,6 @@ bin.state.data <- function(state.fips, LocationFactor = TRUE, nearest.degree){
     # bin data to the nearest .25 degree of lat/long
     binned.state <- bin.lat.long(clean.data, nearest.degree)
     
-    
     # add all of the data together
     state.data <- rbind(binned.state, state.data)
   }
@@ -54,18 +71,18 @@ bin.state.data <- function(state.fips, LocationFactor = TRUE, nearest.degree){
 
 
 # This is an internal function used in the bin.lat.long function
-# This function rounds the decimal given in the grid.size argument 
-# to make the number compatible with binning
+  # This function rounds the decimal given in the grid.size argument 
+  # to make the number compatible with binning
 round.to.nearest <- function(x,nearest){
   rounded <- round(x/nearest) * nearest
   return(rounded)
 }
 
 # This function takes a cleaned county dataset with columns of USDM_Avg, 
-# PDSI, x, y, and date. It bins the lat/long coordinates into the nearest 0.1
-# degree as default, but can be changes to whatever degree you want to round to. 
-# It them takes the average of PDSI, USDM, x, and y 
-# sig.digits is the number of decimal places you want to bin to
+  # PDSI, x, y, and date. It bins the lat/long coordinates into the nearest 0.1
+  # degree as default, but can be changes to whatever degree you want to round to. 
+  # It them takes the average of PDSI, USDM, x, and y 
+  # sig.digits is the number of decimal places you want to bin to
 bin.lat.long <- function(clean.data, grid.size = 0.1){
   # bins the lat/long into whatever decimal place you wanted 
   clean.data.binned <- clean.data %>% 
@@ -82,10 +99,10 @@ bin.lat.long <- function(clean.data, grid.size = 0.1){
 }
 
 # This function crops the pdsi file to the county level
-# Takes the state and county desired as strings, a spatraster object containing pdsi data
-# I added a T/F variable: Location Factor, to tell if we want to include the x, y, and cell numbers from the PDSI gridcells
-# This addition helps with plotting results later 
-## note this raster file has to be loaded in using the rast function from the terra package
+  # Takes the state and county desired as strings, a spatraster object containing pdsi data
+  # I added a T/F variable: Location Factor, to tell if we want to include the x, y, and cell numbers from the PDSI gridcells
+  # This addition helps with plotting results later 
+  ## note this raster file has to be loaded in using the rast function from the terra package
 crop.county.pdsi <- function(state, county, spat.us.pdsi, LocationFactor){ # county and state need to be saved as strings 
   # get the specific county
   sf.county <- counties(state = state, 
@@ -107,7 +124,7 @@ crop.county.pdsi <- function(state, county, spat.us.pdsi, LocationFactor){ # cou
 }
 
 # This function normalizes the land area percentages for the US drought index
-# note this should be done before calculating the weighted averages
+  # note this should be done before calculating the weighted averages
 normalize.usdm <- function(data){
   # D4 stays the same
   # D3 gets D4 subtracted from it 
@@ -131,7 +148,7 @@ normalize.usdm <- function(data){
 }
 
 # This function calculates and creates a new column for the weighted average of the US drought index
-# the average is weighted by the land area percent for each index 
+  # the average is weighted by the land area percent for each index 
 usdm.weighted.average <- function(data) {
   # Define the weights
   weights <- 0:4
@@ -153,7 +170,7 @@ usdm.weighted.average <- function(data) {
 }
 
 # This function interpolates values for PDSI to find the midpoint of the 5 day cycle which the data is collected on. 
-# the midpoint date is the same for the interpolate.usdm function
+  # the midpoint date is the same for the interpolate.usdm function
 interpolate.pdsi <- function(pdsi.data, LocationFactor){
   
   # assign grid cell IDs
@@ -204,7 +221,7 @@ interpolate.pdsi <- function(pdsi.data, LocationFactor){
 }
 
 # This function interpolates values for the us drought monitor 
-# the interpolated dates are the same for the PDSI data 
+  # the interpolated dates are the same for the PDSI data 
 interpolate.usdm <- function(drought.data){
   # deal with date
   baselineDate <- as.Date("1900-01-01") # still didn't find the start date from NOAA..
@@ -246,9 +263,9 @@ join.pdsi.usdm <- function(pdsi.data, usdm.data, LocationFactor){
 }
 
 # This function combines all of the above cleaning for a streamlined approach 
-# the arguments needed are the state and county names as strings, 
-# the pdsi dataset from drought.gov, loaded in as a spatraster object, 
-# and the usdm data from drought.gov for the specific county
+  # the arguments needed are the state and county names as strings, 
+  # the pdsi dataset from drought.gov, loaded in as a spatraster object, 
+  # and the usdm data from drought.gov for the specific county
 clean.county.data <- function(state, county, spat.us.pdsi, 
                               cropped.usdm.data, LocationFactor){
   # crop the pdsi data 
@@ -285,8 +302,8 @@ clean.county.data <- function(state, county, spat.us.pdsi,
 }
 
 # This function creates a random forest model, splitting the data into a training set, 
-# tests the model, and returns A dataset with the weighted averages used to test the rf model, 
-# and the predictions made
+  # tests the model, and returns A dataset with the weighted averages used to test the rf model, 
+  # and the predictions made
 quick.rf <- function(pdsi.usdm.data){
   
   set.seed(1)
