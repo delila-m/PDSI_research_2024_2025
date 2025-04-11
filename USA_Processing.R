@@ -21,8 +21,10 @@ source("drought_functions.R")
 #####
 
 # working directory for Geology computer
-setwd("C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024")
+setwd("C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/tl_2024_us_county")
+country <- st_read("tl_2024_us_county.shp")
 
+plot(country)
 # load in necessary libraries
 source("drought_functions.R")
 
@@ -89,7 +91,7 @@ contUS <- contUS %>%
 
 states <- unique(contUS$State)
 state.fips <- vector(mode = "list",length = length(states))
-allStatesDf25 <- data.frame()
+updatedAllStatesDf_1 <- data.frame()
 # loop through continental US states
 for(index in seq_along(states)){
   
@@ -106,11 +108,14 @@ library(future)
 library(furrr)
 future::plan(strategy = multisession, workers = 6)
 
-allStates <- furrr::future_map(state.fips,bin.state.data,TRUE, 0.5, .progress = TRUE)
+allStates <- furrr::future_map(state.fips,bin.state.data,TRUE, 1, .progress = TRUE)
 
-allStatesDf_0.5 <- list_rbind(allStates)
+
+
+
+updatedAllStatesDf_1 <- list_rbind(allStates)
 # save cleaned data binned to nearest degree
-saveRDS(allStatesDf_0.5, file = "CleanedUS_0.5.RDS")
+saveRDS(updatedAllStatesDf_1, file = "UpdatedCleanedUS_1.RDS")
 #####
 
 
@@ -725,6 +730,9 @@ test.yearsplit.0.5$predictions <- preds.ranger.yearsplit.0.5$predictions
 # save it all for later use 
 save(rf.ranger.fit.yearsplit.0.5, train.yearsplit.0.5, test.yearsplit.0.5, preds.ranger.yearsplit.0.5, file = "RFAnalysisElev1YearSplit.Rdata")
 
+# load in the model for more plotting 
+setwd("C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/CleanedUS_0.5")
+load("RFAnalysis0.5YearSplit.Rdata")
 
 # general RMSE, and rmse for each observation 
 RMSE(preds.ranger.yearsplit.0.5$predictions, test.yearsplit.0.5$USDM_Avg) # 0.6701104!!!
@@ -744,7 +752,11 @@ test.binned <- test.yearsplit.0.5 %>%
 # plotting MSE
 ggplot(test.binned, aes(x = bin.x, y = bin.y, fill = RMSE)) +
   geom_tile() +
-  scale_fill_viridis_c(name = "Mean Squared Error") +
+  scale_fill_gradientn(name = "Mean Squared Error", 
+                      colors = c("yellow", "lightyellow", "orange2", 
+                                 "red", "darkred"), 
+                      values = scales::rescale(c(0, 1, 2, 3, 4)),
+                      limits = c(0, 4)) +
   theme_minimal() +
   labs(title = "Prediction Error Across Continental US",
        x = "Longitude Bin", 
@@ -773,7 +785,11 @@ train.binned <- train.importance %>% group_by(bin.x, bin.y) %>%
 ### Plotting variable importance 
 ggplot(train.binned, aes(x = bin.x, y = bin.y, fill = Mean.PDSI.importance)) +
   geom_tile() +
-  scale_fill_viridis_c(name = "Mean PDSI Importance") +
+  scale_fill_gradientn(name = "Mean PDSI Importance", 
+                       colors = c("yellow", "lightyellow", "orange2", 
+                                  "red", "darkred"), 
+                       values = scales::rescale(c(0, 1, 2, 3, 4)),
+                       limits = c(0, 4)) +
   theme_minimal() +
   labs(title = "PDSI Importance Across Continental US",
        x = "Longitude Bin", 
@@ -803,22 +819,37 @@ preds.2020 <- predict(rf.ranger.fit.yearsplit.0.5, test.2020)
 # add to test df for easy plotting 
 test.2020$preds <- preds.2020$predictions
 
+RMSE(test.2020$preds, test.2020$USDM_Avg) # 0.4878716!!!
+
+
 # create predicted and actual plots, add together and plot
 pred <- ggplot(test.2020, aes(x = bin.x, y = bin.y, fill = preds)) +
   geom_tile() +
-  scale_fill_viridis_c(name = "USDM") +
+  scale_fill_gradientn(name = "USDM", 
+                       colors = c("#E6B940", "#E67D2E", "#E5541B", 
+                                  "#C9281C", "#8E1C14"), 
+                       values = scales::rescale(c(0, 1, 2, 3, 4)),
+                       limits = c(0, 4)) +
   theme_minimal() +
-  labs(title = "Predicted Average USDM Across Continental US for 2020",
-       x = "Longitude Bin", 
-       y = "Latitude Bin")
+  labs(title = "Predicted Average USDM Across Continental US for 2020")+
+  theme(plot.title = element_text(face = "bold", size = 13, hjust = 0.5), 
+        axis.text = element_blank(), 
+        axis.ticks = element_blank(), 
+        axis.title = element_blank())
 
 actual <-  ggplot(test.2020, aes(x = bin.x, y = bin.y, fill = USDM_Avg)) +
   geom_tile() +
-  scale_fill_viridis_c(name = "USDM") +
+  scale_fill_gradientn(name = "USDM", 
+                       colors = c("#E6B940", "#E67D2E", "#E5541B", 
+                                  "#C9281C", "#8E1C14"), 
+                       values = scales::rescale(c(0, 1, 2, 3, 4)),
+                       limits = c(0, 4)) +
   theme_minimal() +
-  labs(title = "Actual Average USDM Across Continental US for 2020",
-       x = "Longitude Bin", 
-       y = "Latitude Bin")
+  labs(title = "Actual Average USDM Across Continental US for 2020")+
+  theme(plot.title = element_text(face = "bold", size = 13, hjust = 0.5), 
+        axis.text = element_blank(), 
+        axis.ticks = element_blank(), 
+        axis.title = element_blank())
 
 plot <- pred + actual
 plot
@@ -970,10 +1001,10 @@ model = xgb.train(data = xgb_train, max.depth = 3,
                   verbose = TRUE)
 
 
-
+###
 # different approach using caret
-grid_tune <- expand_grid(nrounds = c(500, 1000, 1500), 
-                         max_depth = c(2,4,6), 
+grid_tune <- expand_grid(nrounds = c(1000, 1500, 2000, 2500), 
+                         max_depth = c(2,4,6,8), 
                          eta = 0.3, 
                          gamma = 0, 
                          colsample_bytree = 1, 
@@ -993,12 +1024,126 @@ xgb_tune <-  train(x = train_x,
                  verbose = TRUE)
 
 
-xbg_tune$best
+xgb_tune$best
 
+xgb.preds <- predict(xgb_tune, test_0.5)
+
+test_0.5$predicted <- xgb.preds
+save(xgb_tune, train_0.5, test_0.5, xgb.preds, file = "XGBAnalysis_0.5.RData")
+
+# general RMSE, and rmse for each observation 
+RMSE(xgb.preds, test_0.5$USDM_Avg) # 0.5697888!!!
+
+## bin training and testing sets based off lat/long values 
+
+# calculate absolute error and squared error for each observation
+test.binned <- test_0.5 %>% 
+  mutate(Abs_Error = abs(USDM_Avg - predicted), 
+         Sq_Error = (USDM_Avg - predicted)^2) %>% 
+  group_by(bin.x, bin.y) %>% 
+  summarise(MAE = mean(Abs_Error), 
+            MSE = mean(Sq_Error),
+            RMSE = sqrt(MSE), 
+            Mean_predicted = mean(predicted), 
+            Mean_USDM = mean(USDM_Avg),
+            .groups = 'drop')
+
+# plotting MSE
+ggplot(test.binned, aes(x = bin.x, y = bin.y, fill = RMSE)) +
+  geom_tile() +
+  scale_fill_viridis_c(name = "Mean Squared Error") +
+  theme_minimal() +
+  labs(title = "Prediction Error Across Continental US",
+       x = "Longitude Bin", 
+       y = "Latitude Bin")
+
+
+# creating plot of predicted vs actual USDM rating 
+# create predicted and actual plots, add together and plot
+pred <- ggplot(test.binned, aes(x = bin.x, y = bin.y, fill = Mean_predicted)) +
+  geom_tile() +
+  scale_fill_viridis_c(name = "USDM") +
+  theme_minimal() +
+  labs(title = "Predicted Average USDM Across Continental US for Testing set",
+       x = "Longitude Bin", 
+       y = "Latitude Bin")
+
+actual <-  ggplot(test.binned, aes(x = bin.x, y = bin.y, fill = Mean_USDM)) +
+  geom_tile() +
+  scale_fill_viridis_c(name = "USDM") +
+  theme_minimal() +
+  labs(title = "Actual Average USDM Across Continental US for Testing Set",
+       x = "Longitude Bin", 
+       y = "Latitude Bin")
+
+plot <- pred + actual
+plot
 
 
 
 #####
+
+
+# xgboost model with 20% of years left out, binned to 0.5 degree
+#####
+setwd("C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/CleanedUS_0.5")
+
+allStatesDf_0.5 <- readRDS("CleanedUS_0.5.RDS")
+
+# Extract the year from Date column
+allStatesDf_0.5$Year <- as.numeric(format(allStatesDf_0.5$Date, "%Y"))
+
+# Get unique years and sort them
+years <- sort(unique(allStatesDf_0.5$Year))
+
+# Calculate how many years make up approximately 20%
+num_test_years <- ceiling(length(years) * 0.2)
+
+# Use the most recent consecutive years as test set
+test_years <- tail(years, num_test_years)
+train_years <- head(years, length(years) - num_test_years)
+
+# Create train and test datasets
+train.yearsplit.0.5 <- allStatesDf_0.5[allStatesDf_0.5$Year %in% train_years, ]
+test.yearsplit.0.5 <- allStatesDf_0.5[allStatesDf_0.5$Year %in% test_years, ]
+
+train_x = data.matrix(train.yearsplit.0.5 %>% select(-c(USDM_Avg, x_Avg, y_Avg, Date)))
+train_y = train.yearsplit.0.5 %>% select(USDM_Avg)
+
+#define predictor and response variables in testing set
+test_x = data.matrix(test.yearsplit.0.5 %>% select(-c(USDM_Avg, x_Avg, y_Avg, Date)))
+test_y = test.yearsplit.0.5 %>% select(USDM_Avg)
+
+#define final training and testing sets
+xgb_train = xgb.DMatrix(data = train_x, label = train_y$USDM_Avg)
+xgb_test = xgb.DMatrix(data = test_x, label = test_y$USDM_Avg)
+
+#defining a watchlist
+watchlist = list(train=xgb_train, test=xgb_test)
+
+#fit XGBoost model and display training and testing data at each iteration
+# different approach using caret
+grid_tune <- expand_grid(nrounds = c(1000, 1500, 2000, 2500), 
+                         max_depth = c(2,4,6,8), 
+                         eta = 0.3, 
+                         gamma = 0, 
+                         colsample_bytree = 1, 
+                         min_child_weight = 1, 
+                         subsample = 1)
+
+train_ctrl <- trainControl(method = "cv", 
+                           number = 3, 
+                           verboseIter = TRUE, 
+                           allowParallel = TRUE)
+
+xgb_tune <-  train(x = train_x, 
+                   y = train_y$USDM_Avg, 
+                   trControl = train_ctrl, 
+                   tuneGrid = grid_tune, 
+                   method = "xgbTree", 
+                   verbose = TRUE)
+
+
 
 # create a plot of sd of USDM to see where the most variability in the US is
 #####
