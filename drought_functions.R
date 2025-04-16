@@ -33,7 +33,7 @@ bin.elevation.data <- function(raw.elevation.data, grid.size = 0.1){
   # It was intended to be used with the future function, to iterate over a df containing lists of county names
   # future function 
 bin.state.data <- function(state.fips, LocationFactor = TRUE, nearest.degree){
-  pdsi <- rast("agg_met_pdsi_1979_CurrentYear_CONUS.nc")
+  pdsi <- rast("C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/agg_met_pdsi_1979_CurrentYear_CONUS.nc")
   
   # initialize data frame to hold cleaned state data
   state.data <- data.frame()
@@ -47,7 +47,7 @@ bin.state.data <- function(state.fips, LocationFactor = TRUE, nearest.degree){
     fips <- state.fips$AOI.Value[index]
     
     # get the file name
-    file.name <- paste0("countyData/USDM-", fips, ".csv")
+    file.name <- paste0("C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/countyData/USDM-", fips, ".csv")
     
     # read in the data
     drought.data <- read.csv(file.name)
@@ -104,10 +104,16 @@ bin.lat.long <- function(clean.data, grid.size = 0.1){
   # This addition helps with plotting results later 
   ## note this raster file has to be loaded in using the rast function from the terra package
 crop.county.pdsi <- function(state, county, spat.us.pdsi, LocationFactor){ # county and state need to be saved as strings 
-  # get the specific county
-  sf.county <- counties(state = state, 
-                        class = "sf") 
-  # first I'll start with just selecting  county
+  # # get the specific county
+  # sf.county <- counties(state = state, 
+  #                       class = "sf") 
+  # # first I'll start with just selecting  county
+  # county <- sf.county[sf.county$NAME == county, ]
+  # 
+  ## tigris is broken, so we have to read in the whole country and filter by county 
+  
+  sf.county <- st_read("C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/tl_2024_us_county/tl_2024_us_county.shp")
+  
   county <- sf.county[sf.county$NAME == county, ]
   
   # if we want the x/y coordinates and cell numbers from PDSI measurements, w
@@ -139,11 +145,11 @@ normalize.usdm <- function(data){
   data$D2 <- data$normal.D2
   data$D1 <- data$normal.D1
   data$D0 <- data$normal.D0
-  
+
+  data$total <- rowSums(data %>% select(c(D0, D1, D2, D3, D4, None)))
   # return the data frame minus the temporary columns 
   data <- subset(data, select = 
                    -c(normal.D3, normal.D2, normal.D1, normal.D0))
-  # should we test leaving the ugly drought percentages in? 
   return(data)
 }
 
@@ -151,11 +157,11 @@ normalize.usdm <- function(data){
   # the average is weighted by the land area percent for each index 
 usdm.weighted.average <- function(data) {
   # Define the weights
-  weights <- 0:4
+  weights <- 0:5
   
   # Calculate the weighted average across columns D0 to D4
-  data$USDM_Avg <- mapply(function(D0, D1, D2, D3, D4) {
-    values <- c(D0, D1, D2, D3, D4)
+  data$USDM_Avg <- mapply(function(None, D0, D1, D2, D3, D4) {
+    values <- c(None, D0, D1, D2, D3, D4)
     weighted_sum <- sum(values * weights)
     weight_sum <- sum(values)
     
@@ -164,7 +170,7 @@ usdm.weighted.average <- function(data) {
     } else {
       return(weighted_sum / weight_sum)
     }
-  }, data$D0, data$D1, data$D2, data$D3, data$D4)
+  }, data$None, data$D0, data$D1, data$D2, data$D3, data$D4)
   
   return(data)  # Return the modified data frame
 }
