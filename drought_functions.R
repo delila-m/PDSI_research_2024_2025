@@ -307,6 +307,21 @@ clean.county.data <- function(state, county, spat.us.pdsi,
   return(full.data)
 }
 
+# This function converts the weighted average USDM rating back into categorical variable 
+convert.cat.USDM <- function(usdm.data){
+  usdm.data <- usdm.data %>% 
+    mutate(USDM_factor = case_when(
+            USDM_Avg < 0.5 ~ "None",
+            USDM_Avg < 1.5 ~ "D0",
+            USDM_Avg < 2.5 ~ "D1",
+            USDM_Avg < 3.5 ~ "D2",
+            USDM_Avg < 4.5 ~ "D3",
+            TRUE ~ "D4")) %>% 
+    mutate(USDM_factor = factor(USDM_factor))
+  return(usdm.data)
+}
+
+
 # This function creates a random forest model, splitting the data into a training set, 
   # tests the model, and returns A dataset with the weighted averages used to test the rf model, 
   # and the predictions made

@@ -1,4 +1,5 @@
 # Libraries 
+#####
 library(ranger)
 library(viridis)  
 library(ggplot2)
@@ -10,21 +11,23 @@ library(dplyr)
 library(xgboost)
 library(caret)
 library(sf)
-##
+library(maps)
+library(lubridate)
+library(tune)
+library(yardstick)
+library(mclogit)
+library(stats)
+## load in drought functions
 setwd("C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024")
-# load in necessary libraries
 source("drought_functions.R")
+#####
 
-
-
-# Loading in Data, cleaning, and binning to nearest degree of lat/long
+# Loading in Raw Data, cleaning, and binning to nearest degree of lat/long
 #####
 
 # working directory for Geology computer
 setwd("C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/tl_2024_us_county")
-country <- st_read("tl_2024_us_county.shp")
 
-plot(country)
 # load in necessary libraries
 source("drought_functions.R")
 
@@ -85,35 +88,33 @@ contUS <- contUS %>%
 # binned.usa <- bin.lat.long(filtered.usa, 0.25)
 # 
 
-
-#####################################
 # cleaning the US county data
-
+#####
 states <- unique(contUS$State)
 state.fips <- vector(mode = "list",length = length(states))
 updatedAllStatesDf_1 <- data.frame()
+UpdatedAllStatesDf_0.5 <- data.frame()
 # loop through continental US states
 for(index in seq_along(states)){
   
   # filter for just the state's data
-  state.fips[[index]] <- contUS %>% filter(State == states[index])
+  # state.fips[[index]] <- contUS %>% filter(State == states[index])
+  statedata <- readRDS(paste0("C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/UpdatedCleaned_0.5/", states[index], " .RDS"))
   
+  UpdatedAllStatesDf_0.5 <- rbind(UpdatedAllStatesDf_0.5, statedata)
 }
 
-saveRDS(allStatesDf25, file = "CleanedUS_0.25.RDS")
+saveRDS(UpdatedAllStatesDf_0.5, file = "C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/UpdatedCleaned_0.5/UpdatedCleanedUS_0.5.RDS")
 
-
-# Run in furrr ------------------------------------------------------------
+# Binning to county level in furrr 
+#####
 library(future)
 library(furrr)
 future::plan(strategy = multisession, workers = 6)
 
 allStates <- furrr::future_map(state.fips,bin.state.data,TRUE, 1, .progress = TRUE)
 
-
-
-
-updatedAllStatesDf_1 <- list_rbind(allStates)
+UpdatedAllStatesDf_1 <- list_rbind(allStates)
 # save cleaned data binned to nearest degree
 saveRDS(updatedAllStatesDf_1, file = "UpdatedCleanedUS_1.RDS")
 #####
@@ -123,14 +124,18 @@ saveRDS(updatedAllStatesDf_1, file = "UpdatedCleanedUS_1.RDS")
 
 # Running RF model on data binned to one degree
 ######
+
 # loading in data
 setwd("C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/CleanedUS_1")
 
 allStatesDf <- readRDS("CleanedUS_1.RDS")
 
+readRDS("C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/UpdatedCleaned_0.5/UpdatedCleanedUS_0.5.RDS")
+ogcleaned_1 <- readRDS("C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/CleanedUS_1/CleanedUS_1.RDS")
+
 # split into training and testing 
-train <- allStatesDf %>% sample_frac(0.80)
-test <- anti_join(allStatesDf , train)
+train <- grouped %>% sample_frac(0.80)
+test <- anti_join(grouped , train)
 
 
 
@@ -166,13 +171,15 @@ test$predicted <- preds.ranger$predictions
 
 
 # general RMSE, and rmse for each observation 
-RMSE(preds.ranger$predictions, test$USDM_Avg) # 0.5687996!!!
+RMSE(preds.ranger$predictions, test$USDM_Avg) # 0.5453723!!!
 
 
 ## bin training and testing sets based off lat/long values 
 
 # calculate absolute error and squared error for each observation
-test.binned <- test %>% group_by(bin.x, bin.y) %>% 
+test.binned <- test %>% 
+  mutate(Abs_Error = abs(USDM_Avg - predicted), 
+         Sq_Error = (USDM_Avg - predicted)^2) %>%group_by(bin.x, bin.y) %>% 
   summarise(MAE = mean(Abs_Error), 
             MSE = mean(Sq_Error),
             RMSE = sqrt(MSE), 
@@ -188,7 +195,7 @@ train.binned <- train.importance %>% group_by(bin.x, bin.y) %>%
 
 
 # save fit object, traing set, testing set, and predictions
-save(rf.ranger.fit, train, test, preds.ranger, file = "RFAnalysis1.Rdata")
+save(rf.ranger.fit, train, test, preds.ranger, file = "UpdatedRFAnalysis1.Rdata")
 
 ### plot some stuff
 
@@ -253,8 +260,7 @@ ggplot(train.binned, aes(x = bin.x, y = bin.y, fill = Mean.biny.importance)) +
        y = "Latitude Bin")
 #####
 
-
-###### Trying the model again with elevation as a predictor
+# Trying the model with elevation as a predictor, training and testing randomly grouped
 ######
 # loading in data
 setwd("C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/CleanedUS_1")
@@ -409,8 +415,7 @@ ggplot(train.binned, aes(x = bin.x, y = bin.y, fill = Mean.elev.importance)) +
        y = "Latitude Bin")
 #####
 
-
-# trying again with elevation but leaving out 20% of years, from 2020-2025
+# Elevation again as a with test sets grouped by year
 #####
 # Extract the year from Date column
 allStatesElevDf_1$Year <- as.numeric(format(allStatesElevDf_1$Date, "%Y"))
@@ -552,20 +557,37 @@ actual <-  ggplot(test.2020, aes(x = bin.x, y = bin.y, fill = USDM_Avg)) +
 
 plot <- pred + actual
 plot
-
 #####
 
-
-# trying to bin data by 0.5 degree 
+# RF with data binned to 0.5 degree, training and testing randomly grouped
 #####
 # loading in data
-setwd("C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/CleanedUS_0.5")
+setwd("C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/UpdatedCleaned_0.5")
 
-allStatesDf_0.5 <- readRDS("CleanedUS_0.5.RDS")
+allStatesDf_0.5 <- readRDS("FactorUS_0.5.RDS")
 
+allStatesDf_0.5 <- bigset %>% filter(!PDSI_Avg >10) %>% 
+  group_by(bin.x, bin.y, Date) %>% 
+  summarise(PDSI_Avg = mean(PDSI_Avg), 
+            USDM_Avg = mean(USDM_Avg))
+
+allStatesDf_0.5 <- allStatesDf_0.5 %>% 
+  mutate(
+    USDM_factor = case_when(
+      USDM_Avg < 0.5 ~ "None",
+      USDM_Avg < 1.5 ~ "D0",
+      USDM_Avg < 2.5 ~ "D1",
+      USDM_Avg < 3.5 ~ "D2",
+      USDM_Avg < 4.5 ~ "D3",
+      TRUE ~ "D4"
+    )
+  )  
+
+allStatesDf_0.5$USDM_factor <- factor(allStatesDf_0.5$USDM_factor)
 # split into training and testing 
 train_0.5 <- allStatesDf_0.5 %>% sample_frac(0.80)
-test_0.5 <- anti_join(allStatesDf_0.5 , train)
+test_0.5 <- anti_join(allStatesDf_0.5 , train_0.5)
+test_0.5 <- test_0.5[,-6]
 
 # fit da model 
 rf.ranger.fit.0.5 <- ranger(
@@ -583,6 +605,7 @@ rf.ranger.fit.0.5 <- ranger(
 importance_0.5 <- data.frame(rf.ranger.fit.0.5$variable.importance.local)
 train_ungrouped <- train_0.5 %>% ungroup()
 
+
 # Then add the importance columns
 train.importance.0.5 <- train_ungrouped %>% 
   mutate(
@@ -598,8 +621,16 @@ preds.ranger.0.5 <- predict(rf.ranger.fit.0.5, test_0.5, type = "response")
 test_0.5$predicted <- preds.ranger.0.5$predictions
 
 
-# general RMSE, and rmse for each observation 
-RMSE(preds.ranger.0.5$predictions, test_0.5$USDM_Avg) # 0.4755648!!!
+# accuracy 
+accuracy <- yardstick::accuracy(test_0.5, truth = USDM_factor, estimate = predicted) 
+accuracy <- accuracy %>% mutate(percent = .estimate*100)
+
+# Calculate precision, recall, F1 score for each class
+library(caret)
+conf_stats <- confusionMatrix((test_0.5$predicted), 
+                              (test_0.5$USDM_factor))
+print(conf_stats)
+
 
 
 ## bin training and testing sets based off lat/long values 
@@ -623,46 +654,76 @@ train.binned.0.5 <- train.importance.0.5 %>% group_by(bin.x, bin.y) %>%
             .groups = 'drop')
 
 # save fit object, traing set, testing set, and predictions
-save(rf.ranger.fit.0.5, train_0.5, test_0.5, preds.ranger.0.5, file = "RFAnalysis0.5.Rdata")
+save(rf.ranger.fit.0.5, train_0.5, test_0.5, preds.ranger.0.5, file = "RFAnalysis0.5_factor_updated.Rdata")
 
 # load object in again
-setwd("C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/CleanedUS_0.5")
+setwd("C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/UpdatedCleaned_0.5")
 
-load("RFAnalysis0.5.Rdata")
+load("RFAnalysis0.5_factor_updated.Rdata")
+
+# general RMSE, and rmse for each observation 
+RMSE(test_0.5$predicted, test_0.5$USDM_Avg) # 0.6164424!!!
 
 # plotting MSE
-ggplot(test_0.5.binned, aes(x = bin.x, y = bin.y, fill = RMSE)) +
+mseplot <- ggplot(test_0.5.binned, aes(x = bin.x, y = bin.y, fill = RMSE)) +
   geom_tile() +
-  scale_fill_viridis_c(name = "Mean Squared Error") +
+  scale_fill_viridis_c(name = "RMSE") +
   theme_minimal() +
   labs(title = "Prediction Error Across Continental US",
        x = "Longitude Bin", 
        y = "Latitude Bin")
+mseplot <- mseplot + geom_path(data = us_outline, aes(x = long, y = lat, group = group), 
+                                         color = "black", linewidth = 0.7, inherit.aes = FALSE)
+mseplot
 
 ### Plotting variable importance 
-ggplot(train.binned.0.5, aes(x = bin.x, y = bin.y, fill = Mean.PDSI.importance)) +
+# outline for plotting 
+us_outline <- map_data("usa")
+
+
+pdsiplot <- ggplot(train.binned.0.5, aes(x = bin.x, y = bin.y, fill = Mean.PDSI.importance)) +
   geom_tile() +
   scale_fill_viridis_c(name = "Mean PDSI Importance") +
   theme_minimal() +
   labs(title = "PDSI Importance Across Continental US",
        x = "Longitude Bin", 
        y = "Latitude Bin")
+pdsiplot <- pdsiplot + geom_path(data = us_outline, aes(x = long, y = lat, group = group), 
+                                         color = "black", linewidth = 0.7, inherit.aes = FALSE)
+pdsiplot
 
-ggplot(train.binned.0.5, aes(x = bin.x, y = bin.y, fill = Mean.binx.importance)) +
+longplot <- ggplot(train.binned.0.5, aes(x = bin.x, y = bin.y, fill = Mean.binx.importance)) +
   geom_tile() +
   scale_fill_viridis_c(name = "Mean Longitude Importance") +
   theme_minimal() +
   labs(title = "Longitude Importance Across Continental US",
        x = "Longitude Bin", 
        y = "Latitude Bin")
+longplot <- longplot + geom_path(data = us_outline, aes(x = long, y = lat, group = group), 
+                                         color = "black", linewidth = 0.7, inherit.aes = FALSE)
+longplot
 
-ggplot(train.binned.0.5, aes(x = bin.x, y = bin.y, fill = Mean.biny.importance)) +
+latplot <- ggplot(train.binned.0.5, aes(x = bin.x, y = bin.y, fill = Mean.biny.importance)) +
   geom_tile() +
   scale_fill_viridis_c(name = "Mean Latitude Importance") +
   theme_minimal() +
   labs(title = "Latitude Importance Across Continental US",
        x = "Longitude Bin", 
        y = "Latitude Bin")
+latplot <- latplot + geom_path(data = us_outline, aes(x = long, y = lat, group = group), 
+                                         color = "black", linewidth = 0.7, inherit.aes = FALSE)
+latplot
+# plotting variable accuracy
+accuracyplot <- ggplot(accuracy, aes(x = bin.x, y = bin.y, fill = percent)) +
+  geom_tile() +
+  scale_fill_viridis_c(name = "Accuracy (%)") +
+  theme_minimal() +
+  labs(title = "Accuracy of Model",
+       x = "Longitude Bin", 
+       y = "Latitude Bin")
+accuracyplot <- accuracyplot + geom_path(data = us_outline, aes(x = long, y = lat, group = group), 
+                            color = "black", linewidth = 0.7, inherit.aes = FALSE)
+accuracyplot
 
 # creating plot of predicted vs actual USDM rating 
 # create predicted and actual plots, add together and plot
@@ -687,13 +748,32 @@ plot
 
 #####
 
-
-# leave out years with data binned to nearest 0.5 degree
+# Data binned to nearest 0.5 degree with test sets grouped by year
 #####
+setwd("C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/UpdatedCleaned_0.5")
 
-setwd("C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/CleanedUS_0.5")
+allStatesDf_0.5 <- readRDS("FactorUS_0.5.RDS")
 
-allStatesDf_0.5 <- readRDS("CleanedUS_0.5.RDS")
+# 
+# allStatesDf_0.5 <- allStatesDf_0.5 %>% filter(!PDSI_Avg >10) %>% 
+#   group_by(bin.x, bin.y, Date) %>% 
+#   summarise(PDSI_Avg = mean(PDSI_Avg), 
+#             USDM_Avg = mean(USDM_Avg))
+# 
+# allStatesDf_0.5 <- allStatesDf_0.5 %>% 
+#   mutate(
+#     USDM_factor = case_when(
+#       USDM_Avg < 0.5 ~ "None",
+#       USDM_Avg < 1.5 ~ "D0",
+#       USDM_Avg < 2.5 ~ "D1",
+#       USDM_Avg < 3.5 ~ "D2",
+#       USDM_Avg < 4.5 ~ "D3",
+#       TRUE ~ "D4"
+#     )
+#   )  
+# 
+# allStatesDf_0.5$USDM_factor <- factor(allStatesDf_0.5$USDM_factor)
+
 
 # Extract the year from Date column
 allStatesDf_0.5$Year <- as.numeric(format(allStatesDf_0.5$Date, "%Y"))
@@ -709,38 +789,53 @@ test_years <- tail(years, num_test_years)
 train_years <- head(years, length(years) - num_test_years)
 
 # Create train and test datasets
-train.yearsplit.0.5 <- allStatesDf_0.5[allStatesDf_0.5$Year %in% train_years, ]
-test.yearsplit.0.5 <- allStatesDf_0.5[allStatesDf_0.5$Year %in% test_years, ]
+train.yearsplit.0.5.factor <- allStatesDf_0.5[allStatesDf_0.5$Year %in% train_years, ]
+test.yearsplit.0.5.factor <- allStatesDf_0.5[allStatesDf_0.5$Year %in% test_years, ]
 
-rf.ranger.fit.yearsplit.0.5 <- ranger(
-  formula = USDM_Avg ~ PDSI_Avg + bin.x + bin.y,  # Formula specifying the target and predictors
-  data = train.yearsplit.0.5,  # Training dataset
+rf.ranger.fit.yearsplit.0.5.factor <- ranger(
+  formula = USDM_factor ~ PDSI_Avg + bin.x + bin.y,  # Formula specifying the target and predictors
+  data = train.yearsplit.0.5.factor,  # Training dataset
   num.trees = 100,  # Number of trees in the forest
   mtry = 2,  # Number of features to consider at each split
   importance = 'permutation',  # To measure feature importance
   verbose = TRUE, 
   local.importance = TRUE,
-  quantreg = TRUE
 )
 # predict and add predictions to testing set
-preds.ranger.yearsplit.0.5 <- predict(rf.ranger.fit.yearsplit.0.5, test.yearsplit.0.5)
+preds.ranger.yearsplit.0.5.factor <- predict(rf.ranger.fit.yearsplit.0.5.factor, test.yearsplit.0.5.factor)
 
-test.yearsplit.0.5$predictions <- preds.ranger.yearsplit.0.5$predictions
+test.yearsplit.0.5.factor$predictions <- preds.ranger.yearsplit.0.5.factor$predictions
+
+
+# accuracy 
+accuracy <- yardstick::accuracy(test.yearsplit.0.5.factor, truth = USDM_factor, estimate = predictions) 
 
 # save it all for later use 
-save(rf.ranger.fit.yearsplit.0.5, train.yearsplit.0.5, test.yearsplit.0.5, preds.ranger.yearsplit.0.5, file = "RFAnalysisElev1YearSplit.Rdata")
+save(rf.ranger.fit.yearsplit.0.5.factor, train.yearsplit.0.5.factor, test.yearsplit.0.5.factor, preds.ranger.yearsplit.0.5.factor, file = "RFAnalysisElev1YearSplit.Rdata")
 
 # load in the model for more plotting 
-setwd("C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/CleanedUS_0.5")
+setwd("C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/UpdatedCleaned_0.5")
 load("RFAnalysis0.5YearSplit.Rdata")
 
 # general RMSE, and rmse for each observation 
-RMSE(preds.ranger.yearsplit.0.5$predictions, test.yearsplit.0.5$USDM_Avg) # 0.6701104!!!
+RMSE(preds.ranger.yearsplit.0.5$predictions, test.yearsplit.0.5$USDM_Avg) # 0.7111069!!!
+
+test.2020 <- test.2020 %>% 
+  mutate(
+    USDM_predicted_factor = case_when(
+      predictions < 0.5 ~ "None",
+      predictions < 1.5 ~ "D0",
+      predictions < 2.5 ~ "D1",
+      predictions < 3.5 ~ "D2",
+      predictions < 4.5 ~ "D3",
+      TRUE ~ "D4"
+    )
+  )
 
 ## bin training and testing sets based off lat/long values 
-
 # calculate absolute error and squared error for each observation
-test.binned <- test.yearsplit.0.5 %>% 
+test.binned.ys <- test.yearsplit.0.5 %>% 
+  filter(PDSI_Avg <= 10) %>% 
   mutate(Abs_Error = abs(USDM_Avg - predictions), 
          Sq_Error = (USDM_Avg - predictions)^2) %>% 
   group_by(bin.x, bin.y) %>% 
@@ -750,17 +845,16 @@ test.binned <- test.yearsplit.0.5 %>%
             .groups = 'drop')
 
 # plotting MSE
-ggplot(test.binned, aes(x = bin.x, y = bin.y, fill = RMSE)) +
+rmseplot <- ggplot(test.binned.ys, aes(x = bin.x, y = bin.y, fill = RMSE)) +
   geom_tile() +
-  scale_fill_gradientn(name = "Mean Squared Error", 
-                      colors = c("yellow", "lightyellow", "orange2", 
-                                 "red", "darkred"), 
-                      values = scales::rescale(c(0, 1, 2, 3, 4)),
-                      limits = c(0, 4)) +
+  scale_fill_viridis_c(name = "RMSE") +
   theme_minimal() +
   labs(title = "Prediction Error Across Continental US",
        x = "Longitude Bin", 
        y = "Latitude Bin")
+rmseplot <- rmseplot + geom_path(data = us_outline, aes(x = long, y = lat, group = group), 
+                             color = "black", size = 0.7, inherit.aes = FALSE)
+rmseplot
 
 # perhaps three iterations of tests of the training set?
 importance <- data.frame(rf.ranger.fit.yearsplit.0.5$variable.importance.local)
@@ -785,11 +879,7 @@ train.binned <- train.importance %>% group_by(bin.x, bin.y) %>%
 ### Plotting variable importance 
 ggplot(train.binned, aes(x = bin.x, y = bin.y, fill = Mean.PDSI.importance)) +
   geom_tile() +
-  scale_fill_gradientn(name = "Mean PDSI Importance", 
-                       colors = c("yellow", "lightyellow", "orange2", 
-                                  "red", "darkred"), 
-                       values = scales::rescale(c(0, 1, 2, 3, 4)),
-                       limits = c(0, 4)) +
+  scale_fill_viridis() +
   theme_minimal() +
   labs(title = "PDSI Importance Across Continental US",
        x = "Longitude Bin", 
@@ -814,45 +904,107 @@ ggplot(train.binned, aes(x = bin.x, y = bin.y, fill = Mean.biny.importance)) +
 # plot 2020 predictions vs actual
 
 # predict only 2020
-test.2020 <- test.yearsplit.0.5 %>% filter(Year == 2020)
+test.2020 <- test.yearsplit.0.5 %>% filter(Year == 2020) %>% select(-predictions)
 preds.2020 <- predict(rf.ranger.fit.yearsplit.0.5, test.2020)
 # add to test df for easy plotting 
 test.2020$preds <- preds.2020$predictions
 
-RMSE(test.2020$preds, test.2020$USDM_Avg) # 0.4878716!!!
+# accuracy for categorical variable 
+accuracy.2020 <- accuracy(test.2020, truth = USDM_factor, estimate = preds)
 
+RMSE(test.2020$preds, test.2020$USDM_Avg) # 0.5736861!!!
 
 # create predicted and actual plots, add together and plot
-pred <- ggplot(test.2020, aes(x = bin.x, y = bin.y, fill = preds)) +
-  geom_tile() +
-  scale_fill_gradientn(name = "USDM", 
-                       colors = c("#E6B940", "#E67D2E", "#E5541B", 
-                                  "#C9281C", "#8E1C14"), 
-                       values = scales::rescale(c(0, 1, 2, 3, 4)),
-                       limits = c(0, 4)) +
+
+us_outline <- map_data("usa")
+
+# # for categorical modeling, we could instead find the mode of each USDM rating 
+#   # for a certain location when grouping to find the plot 
+# calculate_mode <- function(x) {
+#   uniqx <- unique(x)
+#   uniqx[which.max(tabulate(match(x, uniqx)))]
+# }
+
+# for categorical modeling, we convert to a numeric factor, annd convert back to a factor 
+test.2020.num <- test.2020 %>% 
+  mutate(USDM_num_factor = as.numeric(USDM_factor), 
+         preds.num = as.numeric(preds), 
+         USDM_num_factor = USDM_num_factor-1, 
+         preds.num = preds.num -1)
+# take the average
+test.2020.binned <- test.2020.num %>% group_by(bin.x, bin.y) %>% 
+  summarise(predictions = mean(preds.num), 
+            USDM_Avg = mean(USDM_num_factor))
+
+# convert back to a factor 
+test.2020.binned <- test.2020.binned %>% 
+  mutate(
+    USDM_predicted_factor = case_when(
+      predictions < 0.5 ~ "D4",
+      predictions < 1.5 ~ "D3",
+      predictions < 2.5 ~ "D2",
+      predictions < 3.5 ~ "D1",
+      predictions < 4.5 ~ "D0",
+      TRUE ~ "None"), 
+    USDM_actual_factor = case_when(
+      USDM_Avg < 0.5 ~ "D4",
+      USDM_Avg < 1.5 ~ "D3",
+      USDM_Avg < 2.5 ~ "D2",
+      USDM_Avg < 3.5 ~ "D1",
+      USDM_Avg < 4.5 ~ "D0",
+      TRUE ~ "None"), 
+    USDM_predicted_factor = as.factor(USDM_predicted_factor), 
+    USDM_actual_factor = as.factor(USDM_actual_factor)
+  )
+
+# First, create the basic plot without cell borders
+pred <- ggplot(test.2020.binned, aes(x = bin.x, y = bin.y, fill = USDM_predicted_factor)) +
+  geom_tile() +  # No borders on cells
+  scale_fill_manual(name = "USDM Category", 
+                    values = c("None" = "white", 
+                               "D0" = "#E6B940", 
+                               "D1" = "#E67D2E", 
+                               "D2" = "#E5541B", 
+                               "D3" = "#C9281C", 
+                               "D4" = "#8E1C14")) +
   theme_minimal() +
-  labs(title = "Predicted Average USDM Across Continental US for 2020")+
+  labs(title = "Predicted Average USDM Across Continental US for 2020") +
   theme(plot.title = element_text(face = "bold", size = 13, hjust = 0.5), 
         axis.text = element_blank(), 
         axis.ticks = element_blank(), 
-        axis.title = element_blank())
+        axis.title = element_blank(),
+        legend.background = element_rect(fill = "white", color = "gray50"),
+        legend.key.size = unit(0.8, "cm"),
+        legend.key = element_rect(color = "gray50"))  # Add borders just to legend keys
 
-actual <-  ggplot(test.2020, aes(x = bin.x, y = bin.y, fill = USDM_Avg)) +
+# Now add a spatial outline for just the US
+# If you have the US outline data, you can add it with:
+pred <- pred + geom_path(data = us_outline, aes(x = long, y = lat, group = group), 
+                 color = "black", size = 0.7, inherit.aes = FALSE)
+actual <-  ggplot(test.2020.binned, aes(x = bin.x, y = bin.y, fill = USDM_actual_factor)) +
   geom_tile() +
-  scale_fill_gradientn(name = "USDM", 
-                       colors = c("#E6B940", "#E67D2E", "#E5541B", 
-                                  "#C9281C", "#8E1C14"), 
-                       values = scales::rescale(c(0, 1, 2, 3, 4)),
-                       limits = c(0, 4)) +
-  theme_minimal() +
-  labs(title = "Actual Average USDM Across Continental US for 2020")+
+  scale_fill_manual(name = "USDM Category", 
+                    values = c("None" = "white", 
+                               "D0" = "#E6B940", 
+                               "D1" = "#E67D2E", 
+                               "D2" = "#E5541B", 
+                               "D3" = "#C9281C", 
+                               "D4" = "#8E1C14")) +
+  theme_minimal()  +
+  labs(title = "Actual Average USDM Across Continental US for 2020") +
   theme(plot.title = element_text(face = "bold", size = 13, hjust = 0.5), 
         axis.text = element_blank(), 
         axis.ticks = element_blank(), 
-        axis.title = element_blank())
-
+        axis.title = element_blank(),
+        legend.background = element_rect(fill = "white", color = "gray50"),
+        legend.key.size = unit(0.8, "cm"),
+        legend.key = element_rect(color = "gray50"))
+actual <- actual + geom_path(data = us_outline, aes(x = long, y = lat, group = group), 
+                         color = "black", size = 0.7, inherit.aes = FALSE)
 plot <- pred + actual
+
 plot
+ggsave(plot, file = "predsVsAvtual2020.png")
 
 #####
 
@@ -972,9 +1124,9 @@ plot
 
 # trying an initial Xgboost model with data binned to 0.5 degree
 #####
-setwd("C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/CleanedUS_0.5")
+setwd("C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/UpdatedCleaned_0.5")
 
-allStatesDf_0.5 <- readRDS("CleanedUS_0.5.RDS")
+allStatesDf_0.5 <- readRDS("FactorUS_0.5.RDS")
 
 # split into training and testing 
 train_0.5 <- allStatesDf_0.5 %>% sample_frac(0.80)
@@ -1023,12 +1175,24 @@ xgb_tune <-  train(x = train_x,
                  method = "xgbTree", 
                  verbose = TRUE)
 
+# best_model <- extract_workflow(xgb_tune) %>% 
+#   pull_workflow_fit()
+#   
+# final_model <- finalize_workflow(xgb_tune, best_model) %>%
+#   fit(data = train_0.5)
 
-xgb_tune$best
+test_matrix <- as.matrix(test_0.5[, c("bin.x", "bin.y", "PDSI_Avg")])
 
-xgb.preds <- predict(xgb_tune, test_0.5)
-
+# predict 
+xgb.preds <- predict(xgb_tune, newdata = test_x)
 test_0.5$predicted <- xgb.preds
+
+# confusion matrix
+confusion_mat = as.matrix(table(Actual_Values = test_0.5$USDM_factor, Predicted_Values = test_0.5$predicted)) 
+confusion_mat
+
+
+
 save(xgb_tune, train_0.5, test_0.5, xgb.preds, file = "XGBAnalysis_0.5.RData")
 
 # general RMSE, and rmse for each observation 
@@ -1265,3 +1429,156 @@ preds.ranger.25 <- predict(rf.ranger.fit.25, test25)
 
 RMSE(preds.ranger.25$predictions, test25$USDM_Avg)
 #####
+
+
+# xgboost model predicting on factor instead of continuous
+#####
+
+setwd("C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/UpdatedCleaned_0.5")
+
+allStatesDf_0.5 <- readRDS("UpdatedCleanedUS_0.5.RDS")
+
+# Ensure USDM categories are set up as a factor 
+
+allStatesDf_0.5 <- allStatesDf_0.5 %>% filter(!PDSI_Avg >10) %>% 
+  group_by(bin.x, bin.y, Date) %>% 
+  summarise(PDSI_Avg = mean(PDSI_Avg), 
+            USDM_Avg = mean(USDM_Avg))
+
+allStatesDf_0.5 <- allStatesDf_0.5 %>% 
+  mutate(
+    USDM_factor = case_when(
+      USDM_Avg < 0.5 ~ "None",
+      USDM_Avg < 1.5 ~ "D0",
+      USDM_Avg < 2.5 ~ "D1",
+      USDM_Avg < 3.5 ~ "D2",
+      USDM_Avg < 4.5 ~ "D3",
+      TRUE ~ "D4"
+    )
+  )  
+
+allStatesDf_0.5$USDM_factor <- factor(allStatesDf_0.5$USDM_factor)
+
+saveRDS(allStatesDf_0.5, file = "FactorUS_0.5.RDS")
+
+# split into training and testing 
+train_0.5 <- allStatesDf_0.5 %>% sample_frac(0.80)
+test_0.5 <- anti_join(allStatesDf_0.5, train_0.5)
+
+# For classification, we need to convert factors to numeric (0-based)
+train_x = data.matrix(train_0.5 %>% select(-c(USDM_Avg, bin.x, bin.y)))
+train_y = as.integer(train_0.5$USDM_factor) - 1  # XGBoost requires 0-based index for multiclass
+
+# Define predictor and response variables in testing set
+test_x = data.matrix(test_0.5 %>% select(-c(USDM_Avg, bin.x, bin.y)))
+test_y = as.integer(test_0.5$USDM_factor) - 1
+
+## Using caret for categorical prediction
+train_ctrl <- trainControl(
+  method = "cv", 
+  number = 3, 
+  verboseIter = TRUE, 
+  allowParallel = TRUE
+)
+
+# Define the tuning grid for classification
+grid_tune <- expand_grid(
+  nrounds = c(100, 500, 1000), 
+  max_depth = c(2, 4, 6), 
+  eta = 0.3, 
+  gamma = 0, 
+  colsample_bytree = 1, 
+  min_child_weight = 1, 
+  subsample = 1
+)
+
+# Use train() with categorical target
+xgb_tune <- train(
+  x = train_x, 
+  y = factor(train_0.5$USDM_factor),  # Must be a factor
+  trControl = train_ctrl, 
+  tuneGrid = grid_tune, 
+  method = "xgbTree", 
+  verbose = TRUE,
+  objective = "multi:softprob"  # For multiclass classification
+)
+
+# View best parameters
+xgb_tune$bestTune
+
+# Make predictions
+xgb_pred_factors <- predict(xgb_tune, newdata = test_0.5)
+test_0.5$predicted_factor <- xgb_pred_factors
+#####
+
+
+# log model predicting at 0.5 degree
+#####
+# load da data
+setwd("C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/UpdatedCleaned_0.5")
+
+allStatesDf_0.5 <- readRDS("FactorUS_0.5.RDS")
+
+# Extract the year from Date column
+allStatesDf_0.5$Year <- as.numeric(format(allStatesDf_0.5$Date, "%Y"))
+
+# Get unique years and sort them
+years <- sort(unique(allStatesDf_0.5$Year))
+
+# Calculate how many years make up approximately 20%
+num_test_years <- ceiling(length(years) * 0.2)
+
+# Use the most recent consecutive years as test set
+test_years <- tail(years, num_test_years)
+train_years <- head(years, length(years) - num_test_years)
+
+# Create train and test datasets
+train.yearsplit.0.5.factor <- allStatesDf_0.5[allStatesDf_0.5$Year %in% train_years, ]
+test.yearsplit.0.5.factor <- allStatesDf_0.5[allStatesDf_0.5$Year %in% test_years, ]
+
+model <- mblogit(USDM_factor ~ PDSI_Avg + bin.x + bin.y, 
+                  data = train.yearsplit.0.5.factor)
+
+preds <- predict(model, test.yearsplit.0.5.factor)
+test.yearsplit.0.5.factor$preds <- preds
+
+# general RMSE, and rmse for each observation 
+accuracy(test.yearsplit.0.5.factor$preds, test.yearsplit.0.5.factor$USDM_factor) # 0.6284244!!!
+
+## bin training and testing sets based off lat/long values 
+
+# calculate absolute error and squared error for each observation
+test.binned <- test %>% 
+  mutate(Abs_Error = abs(USDM_Avg - predicted), 
+         Sq_Error = (USDM_Avg - predicted)^2) %>% 
+  group_by(bin.x, bin.y) %>% 
+  summarise(MAE = mean(Abs_Error), 
+            MSE = mean(Sq_Error),
+            RMSE = sqrt(MSE), 
+            .groups = 'drop')
+
+# plotting MSE
+ggplot(test.binned, aes(x = bin.x, y = bin.y, fill = RMSE)) +
+  geom_tile() +
+  scale_fill_viridis_c(name = "Mean Squared Error") +
+  theme_minimal() +
+  labs(title = "Prediction Error Across Continental US",
+       x = "Longitude Bin", 
+       y = "Latitude Bin")
+
+# perhaps three iterations of tests of the training set?
+importance <- data.frame(rf.ranger.fit.yearsplit$variable.importance.local)
+train_ungrouped <- train %>% ungroup()
+
+# Then add the importance columns
+train.importance <- train_ungrouped %>% 
+  mutate(
+    x.bin.importance = importance$bin.x, 
+    y.bin.importance = importance$bin.y, 
+    PDSI.importance = importance$PDSI_Avg,
+    elev.importance = importance$Elev_Avg
+  )
+
+#####
+
+

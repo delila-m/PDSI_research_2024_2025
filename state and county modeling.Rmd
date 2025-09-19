@@ -18,11 +18,11 @@ pdsi <- rast("agg_met_pdsi_1979_CurrentYear_CONUS.nc")
 Pima County, AZ
 ```{r}
 set.seed(1)
-drought.az.pima <- read.csv("C:/Users/delil/Desktop/Fall 2024/Research 2024/Data/Preliminary_modeling/AZ_Counties/USDM-04019.csv")
+drought.az.pima <- read.csv("C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/countyData/USDM-04019.csv")
 pima <- clean.county.data("Arizona", "Pima", pdsi, drought.az.pima, FALSE)
 pimaxy <- clean.county.data("Arizona", "Pima", pdsi, drought.az.pima, TRUE)
 
-
+pima.usdm.normal <- normalize.usdm(drought.az.pima)
 # model with single training and testing set
 pima.train <- pima %>% sample_frac(0.80)
 pima.test <- anti_join(pima, pima.train, by = 'id')
