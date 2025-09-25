@@ -121,6 +121,11 @@ saveRDS(updatedAllStatesDf_1, file = "UpdatedCleanedUS_1.RDS")
 
 
 ### RF Modeling
+# visualizing the errors on categorical models made thus far 
+# categorical model binned to half a degree
+load("RFAnalysis0.5YearSplit.Rdata")
+
+# xgboost model 
 
 # Running RF model on data binned to one degree
 ######
