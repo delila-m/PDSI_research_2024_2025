@@ -121,18 +121,12 @@ saveRDS(updatedAllStatesDf_1, file = "UpdatedCleanedUS_1.RDS")
 
 
 ### RF Modeling
-# visualizing the errors on categorical models made thus far 
-# categorical model binned to half a degree
-load("RFAnalysis0.5YearSplit.Rdata")
-
-# xgboost model 
 
 # Running RF model on data binned to one degree
 ######
 
 # loading in data
 setwd("C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/CleanedUS_1")
-
 allStatesDf <- readRDS("CleanedUS_1.RDS")
 
 readRDS("C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/UpdatedCleaned_0.5/UpdatedCleanedUS_0.5.RDS")
@@ -635,7 +629,39 @@ library(caret)
 conf_stats <- confusionMatrix((test_0.5$predicted), 
                               (test_0.5$USDM_factor))
 print(conf_stats)
-
+# Confusion Matrix and Statistics
+# 
+# Reference
+# Prediction     D0     D1     D2     D3     D4   None
+# D0   324222  58367  11844   2240    303 131107
+# D1    29227  58225  17684   4233    702  10702
+# D2     8517  15108  33064   8265   1214   3724
+# D3     1404   3021   5699  12715   1447    594
+# D4      161    313    650   1105   3125    101
+# None 137351  25020   6480   1768    409 351402
+# 
+# Overall Statistics
+# 
+# Accuracy : 0.6156          
+# 95% CI : (0.6148, 0.6165)
+# No Information Rate : 0.3939          
+# P-Value [Acc > NIR] : < 2.2e-16       
+# 
+# Kappa : 0.4175          
+# 
+# Mcnemar's Test P-Value : < 2.2e-16       
+# 
+# Statistics by Class:
+# 
+#                      Class: D0 Class: D1 Class: D2 Class: D3 Class: D4 Class: None
+# Sensitivity             0.6473   0.36378   0.43839   0.41928  0.434028      0.7062
+# Specificity             0.7355   0.94372   0.96921   0.99020  0.998157      0.7790
+# Pos Pred Value          0.6140   0.48210   0.47307   0.51105  0.572869      0.6726
+# Neg Pred Value          0.7624   0.91151   0.96475   0.98587  0.996781      0.8048
+# Prevalence              0.3939   0.12588   0.05932   0.02385  0.005663      0.3914
+# Detection Rate          0.2550   0.04579   0.02600   0.01000  0.002458      0.2764
+# Detection Prevalence    0.4153   0.09498   0.05497   0.01957  0.004290      0.4109
+# Balanced Accuracy       0.6914   0.65375   0.70380   0.70474  0.716092      0.7426
 
 
 ## bin training and testing sets based off lat/long values 
@@ -662,7 +688,7 @@ train.binned.0.5 <- train.importance.0.5 %>% group_by(bin.x, bin.y) %>%
 save(rf.ranger.fit.0.5, train_0.5, test_0.5, preds.ranger.0.5, file = "RFAnalysis0.5_factor_updated.Rdata")
 
 # load object in again
-setwd("C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/UpdatedCleaned_0.5")
+setwd("C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/Data/UpdatedCleaned_0.5")
 
 load("RFAnalysis0.5_factor_updated.Rdata")
 
@@ -1013,7 +1039,6 @@ ggsave(plot, file = "predsVsAvtual2020.png")
 
 #####
 
-
 ### XGBoost Modeling
 # trying xgboost at 1 degree
 #####
@@ -1126,8 +1151,7 @@ plot
 # rmse and variance maps
 #####
 
-
-# trying an initial Xgboost model with data binned to 0.5 degree
+# trying Xgboost model with data binned to 0.5 degree
 #####
 setwd("C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/UpdatedCleaned_0.5")
 
@@ -1247,11 +1271,7 @@ actual <-  ggplot(test.binned, aes(x = bin.x, y = bin.y, fill = Mean_USDM)) +
 
 plot <- pred + actual
 plot
-
-
-
 #####
-
 
 # xgboost model with 20% of years left out, binned to 0.5 degree
 #####
@@ -1315,10 +1335,6 @@ xgb_tune <-  train(x = train_x,
 
 
 # create a plot of sd of USDM to see where the most variability in the US is
-#####
-library(ggplot2)
-library(dplyr)
-
 # Calculate the standard deviation of USDM_Avg for each location for all years
 usdm_sd_by_location <- allStatesDf_0.5 %>%
   group_by(bin.x, bin.y) %>%
@@ -1344,10 +1360,8 @@ ggplot(usdm_sd_by_location, aes(x = bin.x, y = bin.y, fill = USDM_SD)) +
   theme(legend.position = "right")
 #####
 
-
 # create ts plots of USDM and PDSI to show their differences 
 #####
-
 pdsi <- rast("agg_met_pdsi_1979_CurrentYear_CONUS.nc")
 # tigris is not working for whatever reason
 pima.pdsi <- crop.county.pdsi("Arizona", "Pima", pdsi, TRUE) 
@@ -1396,13 +1410,7 @@ goodLong <- pivot_longer(goodData, cols = -c(ID, x, y, cell),
     day = as.integer(Day),
     Date = as.Date(day, origin = "1900-01-01"), # starting date
     midPointDay = day - 2.5)
-
-
-
-
-
 #####
-
 
 # trying again at 0.25- not useable, 0.25 dataset is too large
 #####
@@ -1434,7 +1442,6 @@ preds.ranger.25 <- predict(rf.ranger.fit.25, test25)
 
 RMSE(preds.ranger.25$predictions, test25$USDM_Avg)
 #####
-
 
 # xgboost model predicting on factor instead of continuous
 #####
@@ -1516,11 +1523,10 @@ xgb_pred_factors <- predict(xgb_tune, newdata = test_0.5)
 test_0.5$predicted_factor <- xgb_pred_factors
 #####
 
-
 # log model predicting at 0.5 degree
 #####
 # load da data
-setwd("C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/UpdatedCleaned_0.5")
+setwd("C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/Data/UpdatedCleaned_0.5")
 
 allStatesDf_0.5 <- readRDS("FactorUS_0.5.RDS")
 
@@ -1549,8 +1555,6 @@ test.yearsplit.0.5.factor$preds <- preds
 
 # general RMSE, and rmse for each observation 
 accuracy(test.yearsplit.0.5.factor$preds, test.yearsplit.0.5.factor$USDM_factor) # 0.6284244!!!
-
-## bin training and testing sets based off lat/long values 
 
 # calculate absolute error and squared error for each observation
 test.binned <- test %>% 
@@ -1583,7 +1587,6 @@ train.importance <- train_ungrouped %>%
     PDSI.importance = importance$PDSI_Avg,
     elev.importance = importance$Elev_Avg
   )
-
 #####
 
 

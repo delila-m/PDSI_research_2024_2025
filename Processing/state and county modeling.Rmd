@@ -1,0 +1,439 @@
+---
+title: "Modeling"
+author: "Delila Medlin"
+date: "`r Sys.Date()`"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+source("drought_functions.R")
+# source("C:/Users/delil/Desktop/Fall 2024/Research 2024/Data/Preliminary_modeling/getUSDMCountyData.R")
+```
+
+Loading in the pdsi data
+```{r}
+pdsi <- rast("agg_met_pdsi_1979_CurrentYear_CONUS.nc")
+```
+Pima County, AZ
+```{r}
+set.seed(1)
+drought.az.pima <- read.csv("C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/countyData/USDM-04019.csv")
+pima <- clean.county.data("Arizona", "Pima", pdsi, drought.az.pima, FALSE)
+pimaxy <- clean.county.data("Arizona", "Pima", pdsi, drought.az.pima, TRUE)
+
+pima.usdm.normal <- normalize.usdm(drought.az.pima)
+# model with single training and testing set
+pima.train <- pima %>% sample_frac(0.80)
+pima.test <- anti_join(pima, pima.train, by = 'id')
+
+pima.rf.fit <- randomForest(WeightedAverage ~ ., 
+             data = pima.train, 
+             importance = TRUE)
+summary(pima.rf.fit)
+pima.preds <- predict(pima.rf.fit, pima.test)
+RMSE(pima.test$WeightedAverage, pima.preds)
+
+# modeling using cross validation
+ctrl <- trainControl(method = "cv", number = 10)
+pima.cv.rf.fit <- train(WeightedAverage ~ ., 
+                   data = pima, 
+                   method = "rf", 
+                   trControl = ctrl)
+
+print(pima.cv.rf.fit)
+
+
+quick.rf(pima)
+```
+Lewis County, WV
+```{r}
+set.seed(1)
+drought.lewis <- read.csv("USDM-54041-Lewis-WV.csv")
+lewis <- clean.county.data("West Virginia", "Lewis", pdsi, drought.lewis, TRUE)
+
+# model with single training and testing set
+lewis.train <- lewis %>% sample_frac(0.80)
+lewis.test <- anti_join(lewis, lewis.train, by = 'id')
+
+lewis.rf.fit <- randomForest(WeightedAverage ~ ., 
+             data = lewis.train, 
+             importance = TRUE)
+
+lewis.preds <- predict(lewis.rf.fit, lewis.test)
+RMSE(lewis.test$WeightedAverage, lewis.preds) # 0.3089867
+
+# put this exact modeling structure into a function
+quick.rf(lewis)
+
+```
+Cascade County, MT
+```{r}
+drought.cascade <- read.csv("USDM-30013-Cascade-MT.csv")
+cascade <- clean.county.data("Montana", "Cascade", pdsi, drought.cascade, FALSE)
+
+results <- quick.rf(cascade)
+
+
+```
+Grady County, OK
+```{r}
+drought.grady <- read.csv("USDM-40051-Grady-OK.csv")
+grady <- clean.county.data("Oklahoma", "Grady", pdsi, drought.grady, FALSE)
+
+quick.rf(grady)
+```
+Hennepin County, MN
+```{r}
+drought.henn <- read.csv("USDM-27053-Hennepin-MN.csv")
+henn <- clean.county.data("Minnesota", "Hennepin", pdsi, drought.henn, FALSE)
+
+quick.rf(henn)
+```
+
+Testing Arizona as a whole state: Fips Codes 
+4001-Apache
+4003-Cochise
+4005-Cocoinino
+4007-Gila
+4009-Graham
+4011-Greenlee
+4012-La Paz
+4013-Maricopa
+4015-Mohave
+4017-Navajo
+4019-Pima
+4021-Pinal
+4023-Santa Cruz
+4025-Yavapai
+
+What I worked on shortly after Meeting on 1/22 as a brute fore attempt at getting all of the data for AZ.  
+```{r}
+set.seed(1)
+
+# initialize list with all of the county fips codes
+az.fips <- c("04001", "04003", "04005", "04007", "04009", 
+             "04011", "04012", "04013", "04015", "04017", 
+             "04019", "04021", "04023", "04025", "04027")
+# Initialize a list with all of the names of arizona counties
+az.counties <- c("Apache", "Cochise", "Coconino", "Gila", 
+            "Graham", "Greenlee", "La Paz", "Maricopa",
+            "Mohave", "Navajo", "Pima", "Pinal", 
+            "Santa Cruz", "Yavapai", "Yuma")
+# create df to store the data from AZ
+AZ.data <- data.frame(County = character(), 
+                      Actual = numeric(),
+                      Predicted = numeric())
+
+# loop through each county 
+for (index in seq_along(az.counties)){
+  county.name <- az.counties[index]
+  fips <- az.fips[index]
+  
+  # get the file name 
+  file.name <- paste0("C:/Users/delil/Desktop/Fall 2024/Research 2024/Data/Preliminary_modeling/AZ_Counties/USDM-", fips, ".csv")
+  
+  # read in the data
+  drought.data <- read.csv(file.name)
+  
+  # processing 
+  clean.data <- clean.county.data("Arizona", county.name, pdsi, drought.data, FALSE)  
+  
+  # save the cleaned data for documentation
+  filepath <- paste0("C:/Users/delil/Desktop/Fall 2024/Research 2024/Data/CleanedAzData/cleaned", county.name, ".RData" )
+  save(clean.data, file = filepath)
+  
+  
+  
+  # process and save 
+  results <- quick.rf(clean.data)
+  
+  # store the county results with the county name 
+  county.results <- data.frame(County = county.name,
+                               Actual = results$test,
+                               Predicted = results$predictions)
+  # bind the results to the big dataset
+  AZ.data <- rbind(county.results, AZ.data)
+}
+#save(AZ.data, file = "AZpreds.RData")
+#head(AZ.data)
+```
+Actual versus predicted to see their relationship.
+```{r}
+
+# 'interactive' aspect from chatgpt, looks cool but not super useful for abstract
+library(plotly)
+
+p <- ggplot(AZ.data, aes(x = actual, y = predicted, color = county)) +
+  geom_point(alpha = 0.6, size = 2) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "black") +
+  labs(
+    title = "Interactive Predicted vs. Actual Values by County",
+    x = "Actual",
+    y = "Predicted"
+  ) +
+  theme_minimal()
+
+ggplotly(p)
+
+```
+A biplot 
+```{r}
+ggplot(AZ.data, aes(x = actual, y = predicted, color = county)) +
+  geom_point(alpha = 0.6, size = 2) +
+  geom_smooth(method = "lm", se = FALSE) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "black") +
+  labs(
+    title = "USDM Prediction Trends by County in Arizona",
+    x = "Actual USDM",
+    y = "Predicted USDM"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "right")
+
+```
+colorblind in r will help with colors
+change opaqueness in the lines 
+bold axes
+```{r}
+# Using viridis
+library(viridis)
+ggplot(AZ.data, aes(x = Actual, y = Predicted, color = County)) +
+  geom_smooth(method = "lm", se = FALSE, alpha = 0.3) +
+  geom_abline(slope = 1, intercept = 0, color = "black", alpha = 0.3) +
+  geom_point(alpha = 0.6, size = 2) +
+  scale_color_viridis_d() +  # 'd' for discrete colors
+  labs(
+    title = "USDM Prediction Trends by County in Arizona",
+    x = "Actual USDM",
+    y = "Predicted USDM"
+  ) +
+  theme_minimal() +
+  theme(
+    legend.position = "bottom",
+    plot.title = element_text(hjust = 0.5, face = "bold"),
+    axis.title = element_text(face = "bold"),
+    axis.text = element_text(face = "bold"),
+    axis.line = element_line(linewidth = 1)
+  )
+
+# OR using RColorBrewer
+library(RColorBrewer)
+# Replace scale_color_viridis_d() with:
+scale_color_brewer(palette = "Set2")  # Set2 is colorblind-friendly
+
+# OR using colorspace
+library(colorspace)
+# Replace scale_color_viridis_d() with:
+scale_color_discrete_qualitative(palette = "Colorblind")
+```
+Boxplot of prediction errors 
+```{r}
+AZ.data$error <- (AZ.data$predicted - AZ.data$actual
+
+ggplot(AZ.data, aes(x = county, y = error, fill = county)) +
+  geom_boxplot(alpha = 0.6) +
+  labs(
+    title = "Prediction Errors by County",
+    x = "County",
+    y = "Error (Predicted - Actual)"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
+
+Modeling to try- averaging for whole county 
+pivoting longer-keeping xy coordinates
+plotly county choropleth masp 
+
+RF modeling with xy coordinates
+Averaging across all dates for the cell- not sure if this is the greatest approach 
+```{r}
+set.seed(1)
+
+# initialize list with all of the county fips codes
+az.fips <- c("04001", "04003", "04005", "04007", "04009", 
+             "04011", "04012", "04013", "04015", "04017", 
+             "04019", "04021", "04023", "04025", "04027")
+# Initialize a list with all of the names of arizona counties
+az.counties <- c("Apache", "Cochise", "Coconino", "Gila", 
+            "Graham", "Greenlee", "La Paz", "Maricopa",
+            "Mohave", "Navajo", "Pima", "Pinal", 
+            "Santa Cruz", "Yavapai", "Yuma")
+
+az.data.2 <- data.frame()
+
+# loop through each county 
+for (index in seq_along(az.counties)){
+  county.name <- az.counties[index]
+  fips <- az.fips[index]
+  
+  # get the file name 
+  file.name <- paste0("C:/Users/delil/Desktop/Fall 2024/Research 2024/Data/Preliminary_modeling/AZ_Counties/USDM-", fips, ".csv")
+  
+  # read in the data
+  drought.data <- read.csv(file.name)
+  
+  # processing 
+  clean.data <- clean.county.data("Arizona", county.name, pdsi, drought.data, TRUE)  
+  
+  #############
+  # grouping PDSI by the date for the whole county 
+  clean.data <- clean.data %>% group_by(Date) %>% 
+    summarise(PDSI_Avg = mean(PDSI, na.rm = TRUE), 
+              x_Avg = mean(x, na.rm = TRUE), 
+              y_Avg = mean(y, na.rm = TRUE), 
+              USDM_Avg = mean(USDM_Avg, na.rm = TRUE))
+  
+  clean.data <- clean.data %>% mutate(County = county.name) %>% 
+    select( c("USDM_Avg", "PDSI_Avg", "County", "x_Avg", "y_Avg"))
+
+  
+  az.data.2 <- rbind(az.data.2, clean.data)
+  
+}
+# both PDSI has a range of -4:7 and USDM has a range of 0:4, which is not helpful for predicting extrema (16688 rows)
+
+# split into training and testing 
+train <- az.data.2 %>% sample_frac(0.80)
+test <- anti_join(az.data.2 , train)
+
+# build model
+rf.fit <-  randomForest(USDM_Avg ~ PDSI_Avg + x_Avg + y_Avg,
+                      data = train,
+                      ntree = 10,
+                      importance = TRUE)
+
+# predict and find RMSE
+preds <- predict(rf.fit, test)
+
+
+RMSE(preds, test$USDM_Avg) # 0.8166322 using averages without the location data
+                           # 0.6989047 using averages with the location data, woah
+
+rf.county.az <- randomForest(USDM_Avg ~ PDSI_Avg + County + x_Avg + y_Avg,
+                      data = train,
+                      ntree = 100,
+                      importance = TRUE)
+
+preds.county <- predict(rf.county.az, test)
+
+RMSE(preds.county, test$USDM_Avg) # 0.7182475 with the addition of a county column! 
+
+importance(rf.county.az) # 
+
+
+```
+I want to do the same thing but instead of averaging to make the set more manageable, taking a sample. This will help keep some of the extrema in the data, as averaging inherently gives a measure of center and doesn't capture the extrema as well. 
+```{r}
+set.seed(1)
+
+# initialize list with all of the county fips codes
+az.fips <- c("04001", "04003", "04005", "04007", "04009", 
+             "04011", "04012", "04013", "04015", "04017", 
+             "04019", "04021", "04023", "04025", "04027")
+# Initialize a list with all of the names of arizona counties
+az.counties <- c("Apache", "Cochise", "Coconino", "Gila", 
+            "Graham", "Greenlee", "La Paz", "Maricopa",
+            "Mohave", "Navajo", "Pima", "Pinal", 
+            "Santa Cruz", "Yavapai", "Yuma")
+
+az.data <- data.frame()
+
+# loop through each county 
+for (index in seq_along(az.counties)){
+  county.name <- az.counties[index]
+  fips <- az.fips[index]
+  
+  # get the file name 
+  file.name <- paste0("C:/Users/delil/Desktop/Fall 2024/Research 2024/Data/Preliminary_modeling/AZ_Counties/USDM-", fips, ".csv")
+  
+  # read in the data
+  drought.data <- read.csv(file.name)
+  
+  # processing 
+  clean.data <- clean.county.data("Arizona", county.name, pdsi, drought.data, TRUE)  
+  
+  ########
+  # sample a small amount of the data to make the set more manageable 
+  #clean.data <- clean.data %>% sample_frac(0.0005) # consider using two stage sampling here instead?
+  
+  
+  #clean.data <- clean.data %>% mutate(County = county.name) %>% 
+    #select( c("USDM_Avg", "PDSI", "County", "x", "y", "Date"))
+
+  
+  az.data <- rbind(az.data, clean.data)
+  
+}
+
+# binning data to tenth decimal place 
+binned.az.data <- bin.lat.long(az.data, .25)
+  
+# both PDSI has a range of about -5 to 7, and USDM has a range of 0-4, good! (9022 rows)
+
+# split into training and testing 
+train <- binned.az.data %>% sample_frac(0.80)
+test <- anti_join(binned.az.data, train)
+
+# build model
+rf.fit <-  randomForest(USDM_Avg ~ PDSI_Avg + x_Avg + y_Avg,
+                      data = train,
+                      ntree = 10,
+                      importance = TRUE)
+
+
+# predict and find RMSE
+preds <- predict(rf.fit, test)
+
+RMSE(preds, test$USDM_Avg) # 0.8166322 using averages without the location data
+                           #  using averages with the location data
+                           # 0.7756843 using a sample with averages
+                           # 0.7177591 using binned lat/long with location 
+
+# RMSE for each gridcell
+test.RMSE <- test %>% group_by(bin.x, bin.y) %>% 
+  summarise(RMSE = sqrt(mean((preds - USDM_Avg)^2)))
+
+
+# plotting RMSE as a map, create a shape file 
+# change to grid?
+rmse.sf <- st_as_sf(test.RMSE, coords = c("bin.x", "bin.y"))
+# plot the shape file 
+ggplot(rmse.sf) +
+  geom_tile(aes(x = X, y = Y, fill = RMSE)) +
+  scale_color_viridis_c(option = "magma") 
+
+rf.county.az <- randomForest(USDM_Avg ~ PDSI + County + x + y,
+                      data = train,
+                      ntree = 100,
+                      importance = TRUE, 
+                      coefficients = TRUE)
+
+preds.county <- predict(rf.county.az, test)
+
+RMSE(preds.county, test$USDM_Avg) # 0.742404 with the addition of a county column! 
+
+importance(rf.county.az) # 
+
+
+```
+
+Testing
+```{r}
+coconino.drought <- read.csv("countyData/USDM-04005.csv")
+
+coconino <- clean.county.data("AZ", "Coconino", pdsi, 
+                              coconino.drought, TRUE)
+
+binned <- bin.lat.long(coconino, 0.25)
+
+cocotest <- coconino %>% sample_frac(0.003)
+
+coconinotest <- coconino %>% group_by(cell) %>% 
+  summarise(PDSI_Avg = mean(PDSI, na.rm = TRUE), 
+            x_Avg = mean(x, na.rm = TRUE), 
+            y_Avg = mean(y, na.rm = TRUE), 
+            USDM_Avg = mean(USDM_Avg, na.rm = TRUE))
+```

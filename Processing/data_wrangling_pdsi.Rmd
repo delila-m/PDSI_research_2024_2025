@@ -1,0 +1,75 @@
+---
+title: "Data wrangling"
+author: "Delila Medlin"
+date: "`r Sys.Date()`"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(raster)
+library(sf)
+library(terra)
+library(tigris)
+library(dplyr)
+library(tidyverse)
+library(tidyterra)
+library(ncdf4)
+```
+
+First creating the initial raster layer for the PDSI data from the whole US, using sub-monthly gridded PDSI data from NOAA
+```{r}
+# add the netcdf file to a spatraster layer 
+us.pdsi <- rast("agg_met_pdsi_1979_CurrentYear_CONUS.nc")
+# take a look at the summary of the object
+us.pdsi
+
+# closer look at the layers
+head(names(us.pdsi))
+tail(names(us.pdsi))
+nlyr(us.pdsi) # I think this means we have 3600 days of observations?
+```
+Looking at the names of the layers, they are in days but I don't quite understand the naming conventions. NOAA lists the start date as 1/1/1979.
+
+
+Loading in the AZ county boundaries from the tigris package in R
+```{r}
+az.county <- counties(state = "Arizona", 
+                      class = "sf") 
+# first I'll start with just selecting pima county
+pima.county <- az.county[az.county$NAME == "Pima", ]
+plot(pima.county)
+```
+
+Crop the data to the az county 
+```{r}
+# two methods to do this- using extract and crop both from terra, I'll try both to start and then see which is better suited for this use
+pima.pdsi.extracted <- terra::extract(us.pdsi, pima.county)
+
+# then we try the crop function from terra
+pima.pdsi.cropped <- terra::crop(us.pdsi, pima.county)
+
+# quick visualization to see what's going on
+plot(pima.pdsi.cropped)
+```
+Not as high resolution as I was expecting given the map on the website. Maybe try plotting this differently using ggplot?
+
+
+#######################################################
+An initial attempt to fix the naming conventions, I'm not 100% sure this is correct. 
+```{r}
+head(names(pima.pdsi.cropped))
+```
+Looking at the original 'day number' labels, it looks like  observations don't cover every single consecutive day, so I'll have to figure out how to translate the frequency of these labels to the new labels.
+```{r}
+# creating the initial date vector
+start_date <- as.Date("1979-01-01")
+date_vector <- start_date + seq(0, nlyr(pima.pdsi.cropped) - 1)
+date_vector <- as.character(date_vector)
+
+# Assign new names to the layers
+names(pima.pdsi.cropped) <- date_vector
+
+# Check the result
+head(names(pima.pdsi.cropped))
+```
