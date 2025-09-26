@@ -46,17 +46,18 @@ summary(confusionMatrix)
 train <- grouped %>% sample_frac(0.80)
 test <- anti_join(grouped , train)
 
+# trying rf using a more indepth gridsearch cv
+install.packages("superml")
+library(superml)
+
+rf <- RFTrainer$new()
+gridsearch <- GridSearchCV$new(trainer = rf, 
+                               parameters = list(
 
 
-rf.ranger.fit <- ranger(
-  formula = USDM_Avg ~ PDSI_Avg + bin.x + bin.y,  # Formula specifying the target and predictors
-  data = train,  # Training dataset
-  num.trees = 100,  # Number of trees in the forest
-  mtry = 3,  # Number of features to consider at each split
-  importance = 'permutation',  # To measure feature importance
-  verbose = TRUE, 
-  local.importance = TRUE,
-)
+
+
+
 
 
 
