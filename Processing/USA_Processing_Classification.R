@@ -50,10 +50,24 @@ test <- anti_join(grouped , train)
 install.packages("superml")
 library(superml)
 
+ormula = USDM_Avg ~ PDSI_Avg + Elev_Avg + bin.x + bin.y,  # Formula specifying the target and predictors
+  data = train,  # Training dataset
+  num.trees = 100,  # Number of trees in the forest
+  mtry = 2,  # Number of features to consider at each split
+  importance = 'permutation',  # To measure feature importance
+  verbose = TRUE, 
+  local.importance = TRUE,
+  quantreg = TRUE
+)
+gsx <- allStatesDf_0.5 %>% select(c(PDSI_Avg, 
 rf <- RFTrainer$new()
 gridsearch <- GridSearchCV$new(trainer = rf, 
-                               parameters = list(
+                               parameters = list(estimators = c(100), 
+                                                 max_depth = c(2, 5, 10)), 
+                               nfolds = 3, 
+                               scoring = c('accuracy', 'auc'))
 
+gridsearch$fit( 
 
 
 
