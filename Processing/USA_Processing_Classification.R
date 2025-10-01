@@ -2,29 +2,34 @@
 library(tidyverse)
 library(dplyr)
 library(ranger)
+library(randomForest)
 
+# Loading in Previously Cleaned data
+#####
 # Data Binned to 1st degree
 setwd("C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/Data/CleanedUS_1")
 allStatesDf <- readRDS("CleanedUS_1.RDS")
-
 
 # Load in data binned to 0.5 degree
 setwd("C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/Data/UpdatedCleaned_0.5")
 allStatesDf_0.5 <- readRDS("FactorUS_0.5.RDS")
 
+# Previous categorical model for comparison 
 setwd("C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/Data/UpdatedCleaned_0.5")
 load("RFAnalysis0.5_factor_updated.Rdata")
+#####
 
-# classification metrics for model binned to 0.5 degree
-
+# Previous Model results 
+#####
+# classification metrics for initial model binned to 0.5 degree
 sensitivity(test_0.5$USDM_factor, test_0.5$predicted)
 # D0        D1        D2        D3        D4        None 
 # 0.6473022 0.3637835 0.4383925 0.4192772 0.4340278 0.7061512
 
-confusionMatrix <- cmatrix(test_0.5$USDM_factor, test_0.5$predicted)
+confusionMatrix <- confusionMatrix((test_0.5$predicted_factor), (test_0.5$USDM_factor))
 summary(confusionMatrix)
 # Confusion Matrix (6 x 6) 
-# ===============================================================
+# ===
 #   D0     D1     D2     D3     D4   None
 # D0   324222  29227   8517   1404    161 137351
 # D1    58367  58225  15108   3021    313  25020
@@ -32,45 +37,174 @@ summary(confusionMatrix)
 # D3     2240   4233   8265  12715   1105   1768
 # D4      303    702   1214   1447   3125    409
 # None 131107  10702   3724    594    101 351402
-# ===============================================================
+# ===
 #   Overall Statistics (micro average)
 # - Accuracy:          0.62
 # - Balanced Accuracy: 0.50
 # - Sensitivity:       0.62
 # - Specificity:       0.92
 # - Precision:         0.62
+#####
 
-
-# classification random forest model 
-# split into training and testing 
-train <- grouped %>% sample_frac(0.80)
-test <- anti_join(grouped , train)
-
-# trying rf using a more indepth gridsearch cv
-install.packages("superml")
+# RF classification using a more in depth gridsearch cv
+#####
 library(superml)
 
-ormula = USDM_Avg ~ PDSI_Avg + Elev_Avg + bin.x + bin.y,  # Formula specifying the target and predictors
-  data = train,  # Training dataset
-  num.trees = 100,  # Number of trees in the forest
-  mtry = 2,  # Number of features to consider at each split
-  importance = 'permutation',  # To measure feature importance
-  verbose = TRUE, 
-  local.importance = TRUE,
-  quantreg = TRUE
-)
-gsx <- allStatesDf_0.5 %>% select(c(PDSI_Avg, 
-rf <- RFTrainer$new()
+# split into training and testing
+train_gsx <- allStatesDf_0.5 %>% sample_frac(0.80)
+test_gsx <- anti_join(allStatesDf_0.5, train_gsx)
+
+# selecting the relevant columns 
+gridsearchtrain_x <- train_gsx %>% select(c(-USDM_Avg)) 
+gridsearchtest_x <- test_gsx %>% select(c(-USDM_Avg))
+# cross validate a new RF model 
+rf <- RFTrainer$new(classification = 1, 
+                    seed = 3)
+
 gridsearch <- GridSearchCV$new(trainer = rf, 
-                               parameters = list(estimators = c(100), 
-                                                 max_depth = c(2, 5, 10)), 
-                               nfolds = 3, 
-                               scoring = c('accuracy', 'auc'))
+                               parameters = list(n_estimators = c(50, 100, 200), 
+                                                 max_depth = c(2, 3, 6)), 
+                               n_folds = 3, 
+                               scoring = c('precision'))
+# fit model 
+gridsearch$fit(gridsearchtrain_x, "USDM_factor")
 
-gridsearch$fit( 
+# look at the best iteration
+gridsearch$best_iteration()
+# $n_estimators
+# [1] 200
+# 
+# $max_depth
+# [1] 2
+# 
+# $precision_avg
+# [1] 0.9854099
+# 
+# $precision_sd
+# [1] 0.001046917
 
+# predict using testing set
+gsx_preds <- rf$predict(df = test_gsx)
 
+# look at results 
+gsx_test <- as.factor(as.integer(test_gsx$USDM_factor) - 1)
+confusionMatrix(gsx_preds, gsx_test)
+# Confusion Matrix and Statistics
+#####
+# Reference
+# Prediction      0      1      2      3      4      5
+# 0 466758  16222    448     39      0  25601
+# 1   8465 140075   5550    157      5     50
+# 2     48   3252  68572   2035     26      2
+# 3      8     34   1110  28017    413      0
+# 4      0      5      8    200   6808      0
+# 5  24328    154      7      1      0 473119
+# 
+# Overall Statistics
+# 
+# Accuracy : 0.9307          
+# 95% CI : (0.9302, 0.9311)
+# No Information Rate : 0.3929          
+# P-Value [Acc > NIR] : < 2.2e-16       
+# 
+# Kappa : 0.8965          
+# 
+# Mcnemar's Test P-Value : NA              
+# 
+# Statistics by Class:
+# 
+#                      Class: 0 Class: 1 Class: 2 Class: 3 Class: 4 Class: 5
+# Sensitivity            0.9343   0.8769  0.90590  0.92013 0.938776   0.9486
+# Specificity            0.9452   0.9872  0.99552  0.99874 0.999832   0.9683
+# Pos Pred Value         0.9169   0.9078  0.92746  0.94710 0.969662   0.9508
+# Neg Pred Value         0.9569   0.9824  0.99405  0.99804 0.999649   0.9669
+# Prevalence             0.3929   0.1256  0.05953  0.02395 0.005703   0.3923
+# Detection Rate         0.3671   0.1102  0.05393  0.02203 0.005354   0.3721
+# Detection Prevalence   0.4004   0.1214  0.05815  0.02327 0.005522   0.3914
+# Balanced Accuracy      0.9397   0.9320  0.95071  0.95943 0.969304   0.9584
+#####
+# save new model 
+save(gridsearch, file = "C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/Data/RFAnalysis_0.5_gcv_updated.Rdata")
 
+# RF model attempting to recreate results from the best iteration of Grid Search 
+#####
+# using the same training and testing sets from the gridsearch 
+rf_recreation <- ranger(USDM_factor ~ PDSI_Avg + bin.x + bin.y,
+                        data = train_gsx, 
+                        num.trees = 200, 
+                        mtry = 2, 
+                        classification = TRUE, 
+                        verbose = TRUE, 
+                        local.importance = TRUE)
+rf_predictions <- predict(rf_recreation, test_gsx)
+
+confusionMatrix(rf_predictions$predictions, test_gsx$USDM_factor)
+
+# XGBoost model
+#####
+# split into training and testing 
+train_0.5 <- allStatesDf_0.5 %>% sample_frac(0.80)
+test_0.5 <- anti_join(allStatesDf_0.5, train_0.5)
+
+# Get vectors of just the x and y we are training / testing on 
+train_x = data.matrix(train_0.5 %>% select(-c(USDM_Avg, bin.x, bin.y)))
+train_y = train_0.5$USDM_factor
+
+# Define predictor and response variables in testing set
+test_x = data.matrix(test_0.5 %>% select(-c(USDM_Avg, bin.x, bin.y)))
+test_y = test_0.5$USDM_factor
+
+## Using caret for categorical prediction
+train_ctrl <- trainControl(
+  method = "cv", 
+  number = 3, 
+  verboseIter = TRUE, 
+  allowParallel = TRUE
+)
+
+# Define the tuning grid for classification
+grid_tune <- expand_grid(
+  nrounds = c(100, 500, 1000), 
+  max_depth = c(2, 4, 6), 
+  eta = 0.3, 
+  gamma = 0, 
+  colsample_bytree = 1, 
+  min_child_weight = 1, 
+  subsample = 1
+)
+
+# Use train() with categorical target
+xgb_tune <- train(
+  x = train_x, 
+  y = train_y
+  trControl = train_ctrl, 
+  tuneGrid = grid_tune, 
+  method = "xgbTree", 
+  verbose = TRUE,
+  objective = "multi:softprob"  # For multiclass classification
+)
+
+# View best parameters
+xgb_tune$bestTune
+
+# Make predictions
+xgb_pred_factors <- predict(xgb_tune, newdata = test_x)
+test_0.5$predicted_factor <- xgb_pred_factors
+
+# save XGBoost object 
+save(train_0.5, test_0.5, xgb_tune, file = "C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/Data/XGBAnalysis_0.5_9-29.Rdata")
+
+load("C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/Data/XGBAnalysis_0.5.Rdata")
+# look at the results 
+confusionMatrix <- confusionMatrix(test_0.5$predicted_factor, test_0.5$USDM_factor)
+confusionMatrix
+#####
+
+# Creating a RF model subset by year using annual PDSI data that matches the LBDA
+#####
+
+# subset the data to the annual summer average
+annual_PDSI_0.5 <- summer.average(allStatesDf_0.5)
 
 
 

@@ -8,7 +8,22 @@ library(tidyterra)
 library(ncdf4)
 library(randomForest)
 library(caret)
+library(lubridate)
 
+
+# This function averages data from June through August to match with 
+  # annual measures from the Living Blended Drought Atlas
+summer.average <- function(cleaned.pdsi.data){
+  # Create a column for the month/ year, select only the relevant months
+  cleaned.pdsi.data <- cleaned.pdsi.data %>% 
+    mutate(month = month(Date), year = year(Date)) %>% 
+    filter(month == c(6, 7, 8)) %>% 
+    # Average the PDSI for each year through the summer months 
+    group_by(year, bin.x, bin.y) %>% 
+    summarize(PDSI_Avg = mean(PDSI_Avg), 
+              USDM_Avg = usdm.weighted.average(USDM_Avg))
+  return(cleaned.pdsi.data)
+}
 
 # This fucntion bins elevation data to the nearest specified degree of latitude and longitude
   # and created an average elevation for the binned area, in m
