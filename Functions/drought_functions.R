@@ -17,7 +17,7 @@ summer.average <- function(cleaned.pdsi.data){
   # Create a column for the month/ year, select only the relevant months
   cleaned.pdsi.data <- cleaned.pdsi.data %>% 
     mutate(month = month(Date), year = year(Date)) %>% 
-    filter(month == c(6, 7, 8)) %>% 
+    filter(month == 6 | month == 7 | month == 8) %>% 
     # Average the PDSI for each year through the summer months 
     group_by(year, bin.x, bin.y) %>% 
     summarize(PDSI_Avg = mean(PDSI_Avg), 
