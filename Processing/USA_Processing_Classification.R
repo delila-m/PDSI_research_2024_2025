@@ -1,8 +1,13 @@
 # Libraries
+#####
 library(tidyverse)
 library(dplyr)
 library(ranger)
 library(randomForest)
+# load in drought functions
+setwd("C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/Functions/")
+source("drought_functions.R")
+#####
 
 # Loading in Previously Cleaned data
 #####
@@ -125,6 +130,7 @@ confusionMatrix(gsx_preds, gsx_test)
 #####
 # save new model 
 save(gridsearch, file = "C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/Data/RFAnalysis_0.5_gcv_updated.Rdata")
+load("C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/Data/RFAnalysis_0.5_gcv_updated.Rdata")
 
 # RF model attempting to recreate results from the best iteration of Grid Search 
 #####
@@ -200,12 +206,72 @@ confusionMatrix <- confusionMatrix(test_0.5$predicted_factor, test_0.5$USDM_fact
 confusionMatrix
 #####
 
-# Creating a RF model subset by year using annual PDSI data that matches the LBDA
+# RF model subset by year using annual PDSI data, matching the frequency of the LBDA
 #####
 
 # subset the data to the annual summer average
 annual_PDSI_0.5 <- summer.average(allStatesDf_0.5)
 
+# create categorical column for USDM measurements
+annual_PDSI_0.5 <- usdm.factor(annual_PDSI_0.5)
+
+# Get unique years and sort them
+years <- sort(unique(annual_PDSI_0.5$year))
+
+# Calculate how many years make up approximately 20%
+num_test_years <- ceiling(length(years) * 0.2)
+
+# Use the most recent consecutive years as test set
+test_years <- tail(years, num_test_years)
+train_years <- head(years, length(years) - num_test_years)
+
+# Create train and test datasets
+train.yearsplit.0.5.factor <- annual_PDSI_0.5[annual_PDSI_0.5$year %in% train_years, ]
+test.yearsplit.0.5.factor <- annual_PDSI_0.5[annual_PDSI_0.5$year %in% test_years, ]
 
 
+# now we can create the new rf model(s)
+rf_recreation <- ranger(USDM_Factor ~ PDSI_Avg + bin.x + bin.y,
+                        data = train.yearsplit.0.5.factor, 
+                        num.trees = 300, 
+                        mtry = 2, 
+                        classification = TRUE, 
+                        verbose = TRUE, 
+                        local.importance = TRUE)
+rf_predictions <- predict(rf_recreation, test.yearsplit.0.5.factor)
 
+confusionMatrix(rf_predictions$predictions, test.yearsplit.0.5.factor$USDM_Factor)
+# Confusion Matrix and Statistics
+#####
+#             Reference
+# Prediction   D0 None   D1   D2   D3   D4
+# D0         3890 1255  831  235   46    6
+# None       4128 3983  405   61    8    0
+# D1         458   80  525  307  132   12
+# D2         81   17  221  284  185   50
+# D3         8    2   53  114  169   21
+# D4         1    0    5   17   47   23
+# 
+# Overall Statistics
+# 
+# Accuracy : 0.5025          
+# 95% CI : (0.4951, 0.5099)
+# No Information Rate : 0.4851          
+# P-Value [Acc > NIR] : 1.839e-06       
+# 
+# Kappa : 0.2549          
+# 
+# Mcnemar's Test P-Value : NA              
+# 
+# Statistics by Class:
+# 
+#                      Class: D0 Class: None Class: D1 Class: D2 Class: D3 Class: D4
+# Sensitivity             0.4541      0.7463   0.25735   0.27898   0.28790  0.205357
+# Specificity             0.7391      0.6266   0.93668   0.96671   0.98840  0.996011
+# Pos Pred Value          0.6211      0.4639   0.34676   0.33890   0.46049  0.247312
+# Neg Pred Value          0.5897      0.8508   0.90617   0.95637   0.97583  0.994934
+# Prevalence              0.4851      0.3022   0.11552   0.05764   0.03324  0.006342
+# Detection Rate          0.2203      0.2255   0.02973   0.01608   0.00957  0.001302
+# Detection Prevalence    0.3546      0.4861   0.08573   0.04745   0.02078  0.005266
+# Balanced Accuracy       0.5966      0.6864   0.59702   0.62284   0.63815  0.600684
+#####

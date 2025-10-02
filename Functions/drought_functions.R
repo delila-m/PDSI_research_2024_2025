@@ -10,6 +10,21 @@ library(randomForest)
 library(caret)
 library(lubridate)
 
+# This function creates a new column for USDM factor based on the 
+  # weighted average calculated when loading and cleaning the data
+usdm.factor <- function(cleaned.usdm.data){
+  cleaned.usdm.data <- cleaned.usdm.data %>% 
+    mutate(
+      USDM_Factor = case_when(
+        USDM_Avg < 0.5 ~ "None",
+        USDM_Avg < 1.5 ~ "D0",
+        USDM_Avg < 2.5 ~ "D1",
+        USDM_Avg < 3.5 ~ "D2",
+        USDM_Avg < 4.5 ~ "D3",
+        TRUE ~ "D4")) %>% 
+    mutate(USDM_Factor = as.factor(USDM_Factor))
+}
+
 
 # This function averages data from June through August to match with 
   # annual measures from the Living Blended Drought Atlas
@@ -21,7 +36,7 @@ summer.average <- function(cleaned.pdsi.data){
     # Average the PDSI for each year through the summer months 
     group_by(year, bin.x, bin.y) %>% 
     summarize(PDSI_Avg = mean(PDSI_Avg), 
-              USDM_Avg = usdm.weighted.average(USDM_Avg))
+              USDM_Avg = mean(USDM_Avg))
   return(cleaned.pdsi.data)
 }
 
