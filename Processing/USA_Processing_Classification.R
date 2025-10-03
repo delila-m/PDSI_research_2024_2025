@@ -4,6 +4,7 @@ library(tidyverse)
 library(dplyr)
 library(ranger)
 library(randomForest)
+library(caret)
 # load in drought functions
 setwd("C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/Functions/")
 source("drought_functions.R")
@@ -127,10 +128,11 @@ confusionMatrix(gsx_preds, gsx_test)
 # Detection Rate         0.3671   0.1102  0.05393  0.02203 0.005354   0.3721
 # Detection Prevalence   0.4004   0.1214  0.05815  0.02327 0.005522   0.3914
 # Balanced Accuracy      0.9397   0.9320  0.95071  0.95943 0.969304   0.9584
-#####
+
 # save new model 
 save(gridsearch, file = "C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/Data/RFAnalysis_0.5_gcv_updated.Rdata")
 load("C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/Data/RFAnalysis_0.5_gcv_updated.Rdata")
+####
 
 # RF model attempting to recreate results from the best iteration of Grid Search 
 #####
@@ -238,8 +240,9 @@ rf_recreation <- ranger(USDM_Factor ~ PDSI_Avg + bin.x + bin.y,
                         classification = TRUE, 
                         verbose = TRUE, 
                         local.importance = TRUE)
-rf_predictions <- predict(rf_recreation, test.yearsplit.0.5.factor)
 
+rf_predictions <- predict(rf_recreation, test.yearsplit.0.5.factor)
+test.yearsplit.0.5.factor$predictions <- rf_predictions$predictions
 confusionMatrix(rf_predictions$predictions, test.yearsplit.0.5.factor$USDM_Factor)
 # Confusion Matrix and Statistics
 #####
@@ -275,3 +278,20 @@ confusionMatrix(rf_predictions$predictions, test.yearsplit.0.5.factor$USDM_Facto
 # Detection Prevalence    0.3546      0.4861   0.08573   0.04745   0.02078  0.005266
 # Balanced Accuracy       0.5966      0.6864   0.59702   0.62284   0.63815  0.600684
 #####
+
+# save model for future use 
+save(rf_recreation, annual_PDSI_0.5, train.yearsplit.0.5.factor, test.yearsplit.0.5.factor, rf_predictions, 
+     file = "C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/Data/rf.annual.yearsplit.0.5.Rdata")
+load("C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/Data/rf.annual.yearsplit.0.5.Rdata")
+
+# plot results for 2024 
+preds.2024 <- test.yearsplit.0.5.factor %>% filter(year == 2024)
+plotdata <- pred.v.actual.plot.factor(preds.2024, "USDM_Factor", "predictions", 
+                          save = FALSE, "testplot", year = 2024)
+
+
+
+
+
+
+
