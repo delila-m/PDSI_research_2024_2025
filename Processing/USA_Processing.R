@@ -55,38 +55,39 @@ contUS <- contUS %>%
       TRUE ~ Area), 
     AreaClean = str_trim(AreaClean)
   )
+save(contUS, file = "C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/Data/CleanedCountiesFips.csv")
 
-# # initialize data frame
-# usa.data <- data.frame()
-# 
-# # loop through each county
-# for (index in 1:nrow(contUS)){
-#   county.name <- contUS$AreaClean[index]
-#   state.name <- contUS$State[index]
-#   fips <- contUS$AOI.Value[index]
-# 
-#   # get the file name
-#   file.name <- paste0("countyData/USDM-", fips, ".csv")
-# 
-#   # read in the data
-#   drought.data <- read.csv(file.name)
-# 
-#   # processing
-#   clean.data <- clean.county.data(state.name, county.name, pdsi, drought.data, TRUE)
-# 
-#   # add state and county column for identification
-#   clean.data <- clean.data %>% mutate(State = state.name,
-#                                       County = county.name)
-# 
-#   # add all of the data together
-#   usa.data <- rbind(usa.data, clean.data)
-# }
-# 
-# 
-# # got through 4 counties in Montana, then quit bc the dataset was too big
-# filtered.usa <- usa.data %>% filter(State != "MT")
-# binned.usa <- bin.lat.long(filtered.usa, 0.25)
-# 
+# initialize data frame
+usa.data <- data.frame()
+
+# loop through each county
+for (index in 1:nrow(contUS)){
+  county.name <- contUS$AreaClean[index]
+  state.name <- contUS$State[index]
+  fips <- contUS$AOI.Value[index]
+
+  # get the file name
+  file.name <- paste0("countyData/USDM-", fips, ".csv")
+
+  # read in the data
+  drought.data <- read.csv(file.name)
+
+  # processing
+  clean.data <- clean.county.data(state.name, county.name, pdsi, drought.data, TRUE)
+
+  # add state and county column for identification
+  clean.data <- clean.data %>% mutate(State = state.name,
+                                      County = county.name)
+
+  # add all of the data together
+  usa.data <- rbind(usa.data, clean.data)
+}
+
+
+# got through 4 counties in Montana, then quit bc the dataset was too big
+filtered.usa <- usa.data %>% filter(State != "MT")
+binned.usa <- bin.lat.long(filtered.usa, 0.25)
+
 
 # cleaning the US county data
 #####

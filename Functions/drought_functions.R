@@ -120,22 +120,6 @@ pred.v.actual.plot.factor <- function(testing.set, actual.col.name, predicted.co
   return(plot_data)
 }
 
-# This function creates a new column for USDM factor based on the 
-  # weighted average calculated when loading and cleaning the data
-usdm.factor <- function(cleaned.usdm.data){
-  cleaned.usdm.data <- cleaned.usdm.data %>% 
-    mutate(
-      USDM_Factor = case_when(
-        USDM_Avg < 0.5 ~ "None",
-        USDM_Avg < 1.5 ~ "D0",
-        USDM_Avg < 2.5 ~ "D1",
-        USDM_Avg < 3.5 ~ "D2",
-        USDM_Avg < 4.5 ~ "D3",
-        TRUE ~ "D4")) %>% 
-    mutate(USDM_Factor = as.factor(USDM_Factor))
-}
-
-
 # This function averages data from June through August to match with 
   # annual measures from the Living Blended Drought Atlas
 summer.average <- function(cleaned.pdsi.data){
@@ -446,6 +430,8 @@ clean.county.data <- function(state, county, spat.us.pdsi,
   # return the final cleaned dataset
   return(full.data)
 }
+
+
 
 # This function converts the weighted average USDM rating back into categorical variable 
 convert.cat.USDM <- function(usdm.data){
