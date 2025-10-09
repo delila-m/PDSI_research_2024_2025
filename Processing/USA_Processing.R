@@ -55,7 +55,7 @@ contUS <- contUS %>%
       TRUE ~ Area), 
     AreaClean = str_trim(AreaClean)
   )
-save(contUS, file = "C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/Data/CleanedCountiesFips.csv")
+write.csv(contUS, file = "C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/Data/CleanedCountiesFips.csv")
 
 # initialize data frame
 usa.data <- data.frame()

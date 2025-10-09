@@ -55,21 +55,13 @@ plot(pima.pdsi.cropped)
 Not as high resolution as I was expecting given the map on the website. Maybe try plotting this differently using ggplot?
 
 
-#######################################################
-An initial attempt to fix the naming conventions, I'm not 100% sure this is correct. 
+#####################################################
+First Look at the Living Blended Drought Atlas Data
 ```{r}
-head(names(pima.pdsi.cropped))
-```
-Looking at the original 'day number' labels, it looks like  observations don't cover every single consecutive day, so I'll have to figure out how to translate the frequency of these labels to the new labels.
-```{r}
-# creating the initial date vector
-start_date <- as.Date("1979-01-01")
-date_vector <- start_date + seq(0, nlyr(pima.pdsi.cropped) - 1)
-date_vector <- as.character(date_vector)
+setwd("C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/Data")
+lbda <- rast("C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/Data/lbda-v2_kddm_pmdi_2017.nc")
 
-# Assign new names to the layers
-names(pima.pdsi.cropped) <- date_vector
 
-# Check the result
-head(names(pima.pdsi.cropped))
 ```
+
+

@@ -10,6 +10,8 @@ library(randomForest)
 library(caret)
 library(lubridate)
 
+
+
 # This function creates a predicted vs. actual heatmap for categorical USDM predictions
 pred.v.actual.plot.factor <- function(testing.set, actual.col.name, predicted.col.name, 
                                       save = FALSE, name.string, year){
@@ -236,7 +238,7 @@ crop.county.pdsi <- function(state, county, spat.us.pdsi, LocationFactor){ # cou
   # 
   ## tigris is broken, so we have to read in the whole country and filter by county 
   
-  sf.county <- st_read("C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/tl_2024_us_county/tl_2024_us_county.shp")
+  sf.county <- st_read("C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/Data/tl_2024_us_county/tl_2024_us_county.shp")
   
   county <- sf.county[sf.county$NAME == county, ]
   
@@ -431,7 +433,32 @@ clean.county.data <- function(state, county, spat.us.pdsi,
   return(full.data)
 }
 
-
+clean.pmdi.data <- function(state, county, spat.us.pmdi, LocationFactor = TRUE){
+  # extract pmsi values for each county using terra
+  pmdi <- crop.county.pdsi(state, county, spat.us.pmdi, LocationFactor)
+  
+  # assign grid cell IDs
+  pmdi$ID <- seq_len(nrow(pmdi))
+  
+  # select only the layers with PMDI data, including the location 
+  goodData <- select(pmdi, ID, cell, x, y, 
+                     starts_with("Palmer.modified.drought.index"))
+  
+  # get rid of of the long name
+  allNames <- names(goodData)
+  newNames <- str_remove(allNames,
+                         "Palmer.modified.drought.index")
+  names(goodData) <- newNames
+  
+  str(goodData)
+  
+  # pivot so we can have all of the dates in one column
+  goodLong <- pivot_longer(goodData, cols = -c(ID, x, y, cell),
+                           names_to = "Year", values_to = "PMSI")
+  
+  return(goodLong)
+  
+}
 
 # This function converts the weighted average USDM rating back into categorical variable 
 convert.cat.USDM <- function(usdm.data){

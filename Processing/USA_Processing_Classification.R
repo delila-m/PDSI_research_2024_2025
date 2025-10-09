@@ -1,6 +1,7 @@
 # Libraries
 #####
 library(tidyverse)
+library(raster)
 library(dplyr)
 library(ranger)
 library(randomForest)
@@ -24,6 +25,45 @@ allStatesDf_0.5 <- readRDS("FactorUS_0.5.RDS")
 setwd("C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/Data/UpdatedCleaned_0.5")
 load("RFAnalysis0.5_factor_updated.Rdata")
 #####
+
+# Loading in and cleaning PMDI Data
+#####
+# raw pmdi file
+pmdiRaster <- rast("C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/Data/lbda-v2_kddm_pmdi_2017.nc")
+
+
+# cleaned county fips codes
+contUS <- read.csv("C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/Data/CleanedCountiesFips.csv")
+
+# initialize data frame to hold PMDI
+pmdi.data <- data.frame()
+
+# loop through each county
+for (index in 1:nrow(contUS)){
+  # grab the state and county name and fips code
+  county.name <- contUS$AreaClean[index]
+  state.name <- contUS$State[index]
+  fips <- contUS$AOI.Value[index]
+
+  # clean and extract data for each county  
+  clean.data <- clean.pmdi.data(state.name, county.name, pmdiRaster, TRUE)
+  
+  # add state/ county name for ID
+  clean.data <- clean.data %>% mutate(State = state.name, 
+                                      County = county.name)
+  
+  # add to extisting data frame 
+  pmdi.data <- rbind(pmdi.data, clean.data)
+  
+  }
+  
+  
+  
+  
+  
+
+
+
 
 # Previous Model results 
 #####
@@ -147,6 +187,7 @@ rf_recreation <- ranger(USDM_factor ~ PDSI_Avg + bin.x + bin.y,
 rf_predictions <- predict(rf_recreation, test_gsx)
 
 confusionMatrix(rf_predictions$predictions, test_gsx$USDM_factor)
+#####
 
 # XGBoost model
 #####
@@ -288,11 +329,7 @@ load("C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/Data/rf.annual.
 preds.2024 <- test.yearsplit.0.5.factor %>% filter(year == 2024)
 plotdata <- pred.v.actual.plot.factor(preds.2024, "USDM_Factor", "predictions", 
                           save = FALSE, "testplot", year = 2024)
-
-
-
-# test example for logan 
-
+#####
 
 
 
