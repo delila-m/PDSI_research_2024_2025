@@ -119,7 +119,66 @@ pred.v.actual.plot.factor <- function(testing.set, actual.col.name, predicted.co
   }
   
   plot
-  return(plot_data)
+  return(plot)
+}
+
+# This function creates a plot of variable importance based on the results from rf
+plot.pdsi.importance <- function(rf.fit, train.set, save = FALSE, name.string){
+  # grab the importance for each location from the rf fit object 
+  importance <- data.frame(rf.fit$variable.importance.local)
+  train_ungrouped <- train.set %>% ungroup()
+  
+  # Then add the importance columns
+  train.importance <- train_ungrouped %>% 
+    mutate(
+      x.bin.importance = importance$bin.x, 
+      y.bin.importance = importance$bin.y, 
+      PDSI.importance = importance$PDSI_Avg
+    )
+  # bin training set by lat/long to look at importance in each grid cell
+  train.binned <- train.importance %>% group_by(bin.x, bin.y) %>% 
+    summarise(Mean.binx.importance = mean(x.bin.importance), 
+              Mean.biny.importance = mean(y.bin.importance),
+              Mean.PDSI.importance = mean(PDSI.importance), 
+              .groups = 'drop')
+  
+  # plot the variable
+  plot <- ggplot(train.binned, aes(x = bin.x, y = bin.y, fill = Mean.PDSI.importance)) +
+    geom_tile() +
+    scale_fill_viridis_c(name = "Mean PDSI Importance") +
+    theme_minimal() +
+    labs(title = "PDSI Importance Across Continental US",
+         x = "Longitude Bin", 
+         y = "Latitude Bin")
+  
+  # save the plot if ya want 
+  if(save){
+    ggsave(plot, filename = paste0("C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/Plots/", name.string, ".png"), width = 10, height = 5)
+  }
+}
+
+# This Function plots prediction error over the us for a continuous model 
+plot.error <- function(test.set, error.metric,  save = FALSE, filename){
+  # bin the testing set to get the MSE and MAE for each gridcell 
+  test.binned <- test %>% 
+    mutate(Abs_Error = abs(USDM_Avg - predicted), 
+           Sq_Error = (USDM_Avg - predicted)^2) %>% group_by(bin.x, bin.y) %>% 
+    summarise(MAE = mean(Abs_Error), 
+              MSE = mean(Sq_Error),
+              RMSE = sqrt(MSE), 
+              .groups = 'drop')
+  
+  # select the metric to plot 
+  
+  
+  # now actually plot the heatmap 
+  ggplot(test.binned, aes(x = bin.x, y = bin.y, fill = MSE)) +
+    geom_tile() +
+    scale_fill_viridis_c(name = "Mean Squared Error") +
+    theme_minimal() +
+    labs(title = "Prediction Error Across Continental US",
+         x = "Longitude Bin", 
+         y = "Latitude Bin")
 }
 
 # This function averages data from June through August to match with 

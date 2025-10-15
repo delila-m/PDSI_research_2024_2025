@@ -31,7 +31,7 @@ load("RFAnalysis0.5_factor_updated.Rdata")
 # raw pmdi file
 pmdiRaster <- rast("C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/Data/lbda-v2_kddm_pmdi_2017.nc")
 
-
+pdsiraster <- rast("C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/Data/agg_met_pdsi_1979_CurrentYear_CONUS.nc")
 # cleaned county fips codes
 contUS <- read.csv("C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/Data/CleanedCountiesFips.csv")
 
@@ -280,6 +280,7 @@ rf_recreation <- ranger(USDM_Factor ~ PDSI_Avg + bin.x + bin.y,
                         mtry = 2, 
                         classification = TRUE, 
                         verbose = TRUE, 
+                        importance = 'permutation',
                         local.importance = TRUE)
 
 rf_predictions <- predict(rf_recreation, test.yearsplit.0.5.factor)
@@ -328,8 +329,19 @@ load("C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/Data/rf.annual.
 # plot results for 2024 
 preds.2024 <- test.yearsplit.0.5.factor %>% filter(year == 2024)
 plotdata <- pred.v.actual.plot.factor(preds.2024, "USDM_Factor", "predictions", 
-                          save = FALSE, "testplot", year = 2024)
+                          save = TRUE, "AnnualModel2024", year = 2024)
+
+importanceplot <- plot.pdsi.importance(rf_recreation, train.yearsplit.0.5.factor, 
+                                  save = TRUE, "PDSIImportanceAnnualModel")
 #####
+
+# spatial autocorrelation into model 
+# balanced accuracy maps 
+
+# apply big drought years onto the model 
+
+
+# look at hurricane recurrance intervals for examples 
 
 
 
