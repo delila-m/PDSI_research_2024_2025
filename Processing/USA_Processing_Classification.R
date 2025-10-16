@@ -62,9 +62,10 @@ for (index in 1:nrow(states.unique)){
 write.csv(pmdi.data, file = "C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/Data/CleanedPMDIData.csv")
 #####  
   
-pmdi.load.test <- read.csv("C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/Data/CleanedPMDIData.csv")  
-  
+pmdi.load.test <- read.csv("C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/Data/ExtractedPMDIData.csv")  
 
+sum(is.na(pmdi.data)) # 2009634 na values.....
+pmdi.cleaned <- na.omit(pmdi.data)
 
 
 
