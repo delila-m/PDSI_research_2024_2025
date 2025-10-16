@@ -25,9 +25,6 @@ source("drought_functions.R")
 # Loading in Raw Data, cleaning, and binning to nearest degree of lat/long
 #####
 
-# working directory for Geology computer
-setwd("C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/tl_2024_us_county")
-
 # load in necessary libraries
 source("drought_functions.R")
 
@@ -55,6 +52,7 @@ contUS <- contUS %>%
       TRUE ~ Area), 
     AreaClean = str_trim(AreaClean)
   )
+#save for future use 
 write.csv(contUS, file = "C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/Data/CleanedCountiesFips.csv")
 
 # initialize data frame
@@ -179,7 +177,7 @@ RMSE(preds.ranger$predictions, test$USDM_Avg) # 0.5453723!!!
 # calculate absolute error and squared error for each observation
 test.binned <- test %>% 
   mutate(Abs_Error = abs(USDM_Avg - predicted), 
-         Sq_Error = (USDM_Avg - predicted)^2) %>%group_by(bin.x, bin.y) %>% 
+         Sq_Error = (USDM_Avg - predicted)^2) %>% group_by(bin.x, bin.y) %>% 
   summarise(MAE = mean(Abs_Error), 
             MSE = mean(Sq_Error),
             RMSE = sqrt(MSE), 

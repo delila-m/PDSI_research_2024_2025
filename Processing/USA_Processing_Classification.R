@@ -6,6 +6,8 @@ library(dplyr)
 library(ranger)
 library(randomForest)
 library(caret)
+library(terra)
+library(tigris)
 # load in drought functions
 setwd("C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/Functions/")
 source("drought_functions.R")
@@ -35,31 +37,32 @@ pdsiraster <- rast("C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/D
 # cleaned county fips codes
 contUS <- read.csv("C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/Data/CleanedCountiesFips.csv")
 
+# no need to get individual counties, we can just do the states instead 
+states.unique <- contUS %>% distinct(State)
+
+
 # initialize data frame to hold PMDI
 pmdi.data <- data.frame()
 
-# loop through each county
-for (index in 1:nrow(contUS)){
-  # grab the state and county name and fips code
-  county.name <- contUS$AreaClean[index]
-  state.name <- contUS$State[index]
-  fips <- contUS$AOI.Value[index]
+# loop through each state
+for (index in 1:nrow(states.unique)){
+  # grab the state name
+  state.name <- states.unique$State[index]
 
   # clean and extract data for each county  
-  clean.data <- clean.pmdi.data(state.name, county.name, pmdiRaster, TRUE)
+  clean.data <- clean.pmdi.data(state.name, pmdiRaster, TRUE)
   
-  # add state/ county name for ID
-  clean.data <- clean.data %>% mutate(State = state.name, 
-                                      County = county.name)
+  # add state name for ID
+  clean.data <- clean.data %>% mutate(State = state.name)
   
   # add to extisting data frame 
   pmdi.data <- rbind(pmdi.data, clean.data)
-  
   }
+# save cleaned set
+write.csv(pmdi.data, file = "C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/Data/CleanedPMDIData.csv")
+#####  
   
-  
-  
-  
+pmdi.load.test <- read.csv("C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/Data/CleanedPMDIData.csv")  
   
 
 

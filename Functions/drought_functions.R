@@ -290,13 +290,13 @@ bin.lat.long <- function(clean.data, grid.size = 0.1){
   ## note this raster file has to be loaded in using the rast function from the terra package
 crop.county.pdsi <- function(state, county, spat.us.pdsi, LocationFactor){ # county and state need to be saved as strings 
   # # get the specific county
-  # sf.county <- counties(state = state, 
-  #                       class = "sf") 
+  # sf.county <- counties(state = state,
+  #                       class = "sf")
   # # first I'll start with just selecting  county
   # county <- sf.county[sf.county$NAME == county, ]
   # 
-  ## tigris is broken, so we have to read in the whole country and filter by county 
-  
+  # # tigris is broken, so we have to read in the whole country and filter by county
+
   sf.county <- st_read("C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/Data/tl_2024_us_county/tl_2024_us_county.shp")
   
   county <- sf.county[sf.county$NAME == county, ]
@@ -312,6 +312,32 @@ crop.county.pdsi <- function(state, county, spat.us.pdsi, LocationFactor){ # cou
     pdsi.extracted <- terra::extract(spat.us.pdsi, county) # creates a data frame
   }
   return(pdsi.extracted)
+}
+
+# This function crops the pdsi file to the state level
+  # Takes the state and county desired as strings, a spatraster object containing pdsi data
+  # I added a T/F variable: Location Factor, to tell if we want to include the x, y, and cell numbers from the PDSI gridcells
+  # This addition helps with plotting results later 
+  ## note this raster file has to be loaded in using the rast function from the terra package
+crop.state.pmdi <- function(state, spat.us.pmdi, LocationFactor){ # county and state need to be saved as strings 
+
+  # use tigris's states function to get shape files for each state 
+  sf.country <- states()
+  
+  # filter to the specific state you want the area of 
+  state.shapefile <- sf.country[sf.country$STUSPS == state, ]
+  
+  # if we want the x/y coordinates and cell numbers from PDSI measurements, w
+  if(LocationFactor){
+    pmdi.extracted <- terra::extract(spat.us.pmdi, state.shapefile,
+                                     cells = TRUE, xy = TRUE) # creates a data frame
+  }
+  else{
+    # use extract function, cells and xy argument return the cell number and xy coordinates, respectively. 
+    # added to help with mapping visualizatona later on 
+    pmdi.extracted <- terra::extract(spat.us.pmdi, state.shapefile) # creates a data frame
+  }
+  return(pmdi.extracted)
 }
 
 # This function normalizes the land area percentages for the US drought index
@@ -492,28 +518,28 @@ clean.county.data <- function(state, county, spat.us.pdsi,
   return(full.data)
 }
 
-clean.pmdi.data <- function(state, county, spat.us.pmdi, LocationFactor = TRUE){
-  # extract pmsi values for each county using terra
-  pmdi <- crop.county.pdsi(state, county, spat.us.pmdi, LocationFactor)
+clean.pmdi.data <- function(state, spat.us.pmdi, LocationFactor = TRUE){
+  # extract pmsi values for each state using terra
+  pmdi <- crop.state.pmdi(state, spat.us.pmdi, LocationFactor)
   
   # assign grid cell IDs
   pmdi$ID <- seq_len(nrow(pmdi))
   
   # select only the layers with PMDI data, including the location 
   goodData <- select(pmdi, ID, cell, x, y, 
-                     starts_with("Palmer.modified.drought.index"))
+                     starts_with("PMDI_"))
   
   # get rid of of the long name
   allNames <- names(goodData)
   newNames <- str_remove(allNames,
-                         "Palmer.modified.drought.index")
+                         "PMDI_")
   names(goodData) <- newNames
   
   str(goodData)
   
   # pivot so we can have all of the dates in one column
   goodLong <- pivot_longer(goodData, cols = -c(ID, x, y, cell),
-                           names_to = "Year", values_to = "PMSI")
+                           names_to = "Year", values_to = "PMDI")
   
   return(goodLong)
   
