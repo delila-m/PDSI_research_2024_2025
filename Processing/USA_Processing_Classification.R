@@ -65,11 +65,25 @@ write.csv(pmdi.data, file = "C:/Users/dgm239/Downloads/Research_2025/PDSI_resear
 pmdi.load.test <- read.csv("C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/Data/ExtractedPMDIData.csv")  
 
 sum(is.na(pmdi.data)) # 2009634 na values.....
-pmdi.cleaned <- na.omit(pmdi.data)
+pmdi.cleaned <- na.omit(pmdi.load.test)
+ 
+# look into the distribution of PMDI and PDSI data
+pmdi <- ggplot(pmdi.cleaned, aes(PMDI))+
+  geom_histogram(binwidth = 1, fill = "lightblue4", 
+                 color  = "grey")+
+  xlim(-10, 10)+
+  labs(title = "PMDI Distribution")
 
+pdsi <- ggplot(annual_PDSI_0.5, aes(PDSI_Avg))+
+  geom_histogram(binwidth = 1, fill = "lightblue4", 
+                 color  = "grey")+
+  xlim(-10, 10)+
+  labs(title = "PDSI Distribution")
 
+comparison <- pmdi + pdsi
+comparison 
 
-# Previous Model results 
+# Previous Model resupdsiraster# Previous Model results 
 #####
 # classification metrics for initial model binned to 0.5 degree
 sensitivity(test_0.5$USDM_factor, test_0.5$predicted)
