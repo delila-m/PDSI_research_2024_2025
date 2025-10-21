@@ -62,10 +62,10 @@ for (index in 1:nrow(states.unique)){
 write.csv(pmdi.data, file = "C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/Data/CleanedPMDIData.csv")
 #####  
   
-pmdi.load.test <- read.csv("C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/Data/ExtractedPMDIData.csv")  
+pmdi <- read.csv("C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/Data/ExtractedPMDIData.csv")  
 
 sum(is.na(pmdi.data)) # 2009634 na values.....
-pmdi.cleaned <- na.omit(pmdi.load.test)
+pmdi.cleaned <- na.omit(pmdi)
  
 # look into the distribution of PMDI and PDSI data
 pmdi <- ggplot(pmdi.cleaned, aes(PMDI))+
@@ -351,6 +351,22 @@ plotdata <- pred.v.actual.plot.factor(preds.2024, "USDM_Factor", "predictions",
 
 importanceplot <- plot.pdsi.importance(rf_recreation, train.yearsplit.0.5.factor, 
                                   save = TRUE, "PDSIImportanceAnnualModel")
+
+# predict using pmdi 
+# select relevant columns and rename so they can be imputted into the function
+pmdi_prediction_set <- pmdi.cleaned %>% dplyr::select(x, y, Year, PMDI) %>% 
+                                        mutate(PDSI_Avg = PMDI, 
+                                                      bin.x = x, 
+                                                      bin.y = y, 
+                                                      year = Year) %>% 
+                                        dplyr::select(PDSI_Avg, bin.x, bin.y, year)
+
+pmdi_predictions <- predict(rf_recreation, pmdi_prediction_set, progress = "window")
+pmdi_prediction_set$predictions <- pmdi_predictions$predictions
+
+pmdi.plotting.set <- pmdi_prediction_set %>% dplyr::filter(year == 1000)
+plot.pmdi(pmdi.plotting.set, "predictions", year = 1000, name.string = "PMDItestPlot", save = TRUE)
+
 #####
 
 # spatial autocorrelation into model 

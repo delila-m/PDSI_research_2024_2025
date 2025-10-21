@@ -10,7 +10,40 @@ library(randomForest)
 library(caret)
 library(lubridate)
 
-
+# This Function plots predicted PMDI data by year
+plot.pmdi <- function(pmdi.predictions, predicted.col.name,
+                      name.string, year, save = FALSE){
+  # 
+  
+  # create plot for the predicted values
+  pred.plot <-  ggplot(pmdi.predictions, aes(x = bin.x, y = bin.y, fill = .data[[predicted.col.name]])) +
+    geom_tile() +
+    scale_fill_manual(name = "USDM Category", 
+                      values = c("None" = "white", 
+                                 "D0" = "#E6B940", 
+                                 "D1" = "#E67D2E", 
+                                 "D2" = "#E5541B", 
+                                 "D3" = "#C9281C", 
+                                 "D4" = "#8E1C14")) +
+    theme_minimal()  +
+    labs(title = paste0("Actual Average USDM Across Continental US for ", year)) +
+    theme(plot.title = element_text(face = "bold", size = 13, hjust = 0.5), 
+          axis.text = element_blank(), 
+          axis.ticks = element_blank(), 
+          axis.title = element_blank(),
+          legend.background = element_rect(fill = "white", color = "gray50"),
+          legend.key.size = unit(0.8, "cm"),
+          legend.key = element_rect(color = "gray50"))
+  us_outline <- map_data("usa")
+  
+  pred.plot <- pred.plot + geom_path(data = us_outline, aes(x = long, y = lat, group = group), 
+                               color = "black", linewidth = 0.7, inherit.aes = FALSE)
+  pred.plot
+  
+  if(save){
+    ggsave(pred.plot, file = paste0(name.string, ".png"))
+  }
+}
 
 # This function creates a predicted vs. actual heatmap for categorical USDM predictions
 pred.v.actual.plot.factor <- function(testing.set, actual.col.name, predicted.col.name, 
