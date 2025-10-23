@@ -41,7 +41,7 @@ plot.pmdi <- function(pmdi.predictions, predicted.col.name,
   pred.plot
   
   if(save){
-    ggsave(pred.plot, file = paste0(name.string, ".png"))
+    ggsave(pred.plot, file = paste0("C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/Plots/", name.string, ".png"))
   }
 }
 

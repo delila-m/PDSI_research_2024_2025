@@ -8,6 +8,7 @@ library(randomForest)
 library(caret)
 library(terra)
 library(tigris)
+library(splines)
 # load in drought functions
 setwd("C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/Functions/")
 source("drought_functions.R")
@@ -367,12 +368,20 @@ pmdi_prediction_set$predictions <- pmdi_predictions$predictions
 pmdi.plotting.set <- pmdi_prediction_set %>% dplyr::filter(year == 1000)
 plot.pmdi(pmdi.plotting.set, "predictions", year = 1000, name.string = "PMDItestPlot", save = TRUE)
 
+save(pmdi.plotting.set, 
+     file = "C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/Data/PMDIPredictionSet.Rdata")
+load("C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/Data/PMDIPredictionSet.Rdata")
+
+#####
+
+# trying out using smoothing splines to get a smoother spatial prediction 
 #####
 
 # spatial autocorrelation into model 
 # balanced accuracy maps 
 
 # apply big drought years onto the model 
+  # add vector of droughts over D2 as a weights parameter
 
 
 # look at hurricane recurrance intervals for examples 
