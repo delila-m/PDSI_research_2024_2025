@@ -368,13 +368,24 @@ pmdi_prediction_set$predictions <- pmdi_predictions$predictions
 pmdi.plotting.set <- pmdi_prediction_set %>% dplyr::filter(year == 1000)
 plot.pmdi(pmdi.plotting.set, "predictions", year = 1000, name.string = "PMDItestPlot", save = TRUE)
 
-save(pmdi.plotting.set, 
+# fix the year issue
+pmdi_prediction_set <- pmdi_prediction_set %>% mutate(year = year - 1)
+
+save(pmdi_prediction_set, 
      file = "C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/Data/PMDIPredictionSet.Rdata")
 load("C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/Data/PMDIPredictionSet.Rdata")
 
 #####
 
-# trying out using smoothing splines to get a smoother spatial prediction 
+# filtering by one test gridcell to find recurrence intervals  
+
+test_cell <- pmdi_prediction_set %>% filter(bin.x == -110.25) %>% 
+                                     filter(bin.y == 35.25)
+
+test_cell$num_USDM <- 
+
+ggplot(test_cell, aes(x= year, y = predictions)) + 
+  geom_ts
 #####
 
 # spatial autocorrelation into model 
@@ -384,7 +395,7 @@ load("C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/Data/PMDIPredic
   # add vector of droughts over D2 as a weights parameter
 
 
-# look at hurricane recurrance intervals for examples 
+# look at hurricane recurrence intervals for examples 
 
 
 
