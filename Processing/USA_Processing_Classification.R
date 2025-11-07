@@ -382,10 +382,99 @@ load("C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/Data/PMDIPredic
 test_cell <- pmdi_prediction_set %>% filter(bin.x == -110.25) %>% 
                                      filter(bin.y == 35.25)
 
-test_cell$num_USDM <- 
+load("C:/Users/delil/Desktop/NAU/Research 2024-2025/PDSI_research_2024/Data/PMDIPredictionSet.Rdata")
 
-ggplot(test_cell, aes(x= year, y = predictions)) + 
-  geom_ts
+
+# shift to count drought in that category or more severe
+pmdi_one_cell <- pmdi_prediction_set %>%
+  filter(bin.x == -113.75 & bin.y == 35.25) %>%
+  mutate(plotting_preds = case_when(predictions == "None" ~ 1,
+                                    predictions == "D0" ~ 2,
+                                    predictions == "D1" ~ 3,
+                                    predictions == "D2" ~ 4,
+                                    predictions == "D3" ~ 5,
+                                    predictions == "D4" ~ 6,
+                                    TRUE ~ -1 ))
+
+ggplot(pmdi_one_cell, aes(x=year, y= plotting_preds))+
+  geom_line()+
+  labs(title = "Time Series for cell -113.75, 35.25")+
+  ylab("USDM Predictions")+
+  xlab("Year")
+
+# or plotting as a time series
+time_series <- pmdi_one_cell %>% select(plotting_preds) %>%
+  ts(start = c(0, 1), frequency = 1)
+
+plot.ts(time_series, main = "Time Series for cell -113.75, 35.25",
+        ylab = "USDM Predictions")
+
+# count the number of drought occurrences over a certain threshold
+recurrence_intervals <- pmdi_one_cell %>% group_by(predictions) %>%
+  summarize(drought_counts = n())
+
+recurrence_intervals
+
+# find the recurrences for 2018 years using rank calculation
+recurrence_intervals <- recurrence_intervals %>%
+  mutate(recurrence_rank = case_when(
+    predictions == "None" ~ (2018+1)/ 6,
+    predictions == "D0" ~ (2018+1)/ 5,
+    predictions == "D1" ~ (2018+1)/ 4,
+    predictions == "D2" ~ (2018+1)/ 3,
+    predictions == "D3" ~ (2018+1)/ 2,
+    predictions == "D4" ~ (2018+1)/ 1)) %>%
+  mutate(recurrence_proportion = case_when(
+    predictions == "None" ~ 2018 / drought_counts,
+    predictions == "D0" ~ 2018 / drought_counts,
+    predictions == "D1" ~ 2018 / drought_counts,
+    predictions == "D2" ~ 2018 / drought_counts,
+    predictions == "D3" ~ 2018 / drought_counts,
+    predictions == "D4" ~ 2018 / drought_counts))
+
+recurrence_intervals
+
+# use legitimate recurrence quantification analysis techniques...
+library(crqa)
+
+# example to figure out how the function works
+data(crqa)
+
+eyemovement <- eyemovement %>%
+  mutate(Listener = as.factor(listener),
+         Narrator = as.factor(narrator)) %>%
+  select(Listener, Narrator)
+narrator <- eyemovement$Narrator
+listener <- eyemovement$Listener
+
+listener_aRQA <- crqa(listener, listener,
+                      delay = 1, embed = 1, rescale = 0,
+                      radius = 0, normalize = 0, mindiagline = 2,
+                      minvertline = 2, datatype = "categorical")
+
+# try with pmdi data
+pmdi <- pmdi_one_cell$predictions
+pmdi_aRQA <- crqa(pmdi, pmdi,
+                  delay = 1, embed = 1, rescale = 0,
+                  radius = 0, normalize = 0, mindiagline = 2,
+                  minvertline = 2, datatype = "categorical")
+
+plot_rp(pmdi_aRQA$RP)
+
+pmdi_historical <- pmdi_one_cell %>% filter(year < 1990) %>%
+  select(predictions)
+pmdi_current <- pmdi_one_cell %>% filter(year >= 1990) %>%
+  select(predictions)
+
+
+pmdi_historical_aRQA <- crqa(pmdi_historical, pmdi_historical,
+                             delay = 1, embed = 1, rescale = 0,
+                             radius = 0, normalize = 0, mindiagline = 2,
+                             minvertline = 2, datatype = "categorical")
+pmdi_current_aRQA <- crqa(pmdi_current, pmdi_current,
+                          delay = 1, embed = 1, rescale = 0,
+                          radius = 0, normalize = 0, mindiagline = 2,
+                          minvertline = 2, datatype = "categorical")
 #####
 
 # spatial autocorrelation into model 
