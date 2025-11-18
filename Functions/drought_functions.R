@@ -9,6 +9,152 @@ library(ncdf4)
 library(randomForest)
 library(caret)
 library(lubridate)
+library(patchwork)
+
+# This function crops a dataframe to one cell given coordinates and creates a column of numerical equivalents of drought categories 
+crop.cell(pmdi.set, xbin, ybin){
+  pmdi_one_cell <- pmdi.set %>%
+    filter(bin.x == xbin & bin.y == ybin) %>%
+    mutate(intensity = case_when(predictions == "None" ~ 1,
+                                 predictions == "D0" ~ 2,
+                                 predictions == "D1" ~ 3,
+                                 predictions == "D2" ~ 4,
+                                 predictions == "D3" ~ 5,
+                                 predictions == "D4" ~ 6,
+                                 TRUE ~ -1 ))
+  return(pmdi_one_cell)
+}
+
+# This Function identifies drought events over a certain threshold and connects 
+  # them to a drought ID
+  # was created with help from GAI which helped me with the looping process 
+identify.drought(pmdi_one_cell, intensity_treshold = 2){
+  # Define drought intensity mapping
+  drought_map <- c('None' = 1, 'D0' = 2, 'D1' = 3, 'D2' = 4, 'D3' = 5, 'D4' = 6)
+  
+  # Identify drought events (any value >= the given threshold)
+  pmdi_one_cell$is_drought <- pmdi_one_cell$intensity >= intensity_treshold
+  
+  # Create drought event IDs
+  pmdi_one_cell$drought_id <- NA
+  drought_event_id <- 0
+  
+  # loop through the given drought set 
+  for (i in 1:nrow(pmdi_one_cell)) {
+    # check if the current row is in a drought 
+    if (pmdi_one_cell$is_drought[i]) {
+      # if yes, check to see if this is the first instance of drought, 
+        # or if the previous cell is connected to a drought ID
+      if (i == 1 || !pmdi_one_cell$is_drought[i-1]) {
+        # increment ID to note the Start of new drought event
+        drought_event_id <- drought_event_id + 1
+      }
+      # When there isn't an existing drought event in the previous row, 
+        # create a new drought ID 
+      pmdi_one_cell$drought_id[i] <- drought_event_id
+    }
+  }
+  # return ddataset
+  return(pmdi_one_cell)
+}
+
+# This function groups by each drought event, summarizes different stats about 
+  # a given drought event, and finds the return intervals of each drought category
+  # This function returns a list of said drought events and return intervals, 
+    # with the option of returning only the most severe droughts 
+summarize.drought.events(pmdi_one_cell, only_severe = FALSE, severity_level){
+  
+  # Calculate drought event statistics
+  drought_events <- pmdi_one_cell %>%
+    filter(!is.na(drought_id)) %>%
+    group_by(drought_id) %>%
+    summarise(
+      start_year = first(year),
+      end_year = last(year),
+      duration = n(),
+      avg_intensity = mean(intensity),
+      max_intensity = max(intensity),
+      min_intensity = min(intensity), 
+      avg_PDSI = mean(PDSI_Avg),
+      drought_sequence = paste(predictions, collapse = ", "),
+      .groups = 'drop'
+    )
+  # Add max intensity label with actual drought categories 
+  intensity_reverse_map <- names(drought_map)
+  names(intensity_reverse_map) <- drought_map
+  
+  drought_events$max_intensity_label <- intensity_reverse_map[as.character(drought_events$max_intensity)]
+  drought_events$avg_intensity_label <- intensity_reverse_map[as.character(round(drought_events$avg_intensity))]
+  drought_events$min_intensity_label <- intensity_reverse_map[as.character(drought_events$min_intensity)]
+  
+  # Return interval by drought intensity
+  # initialize drought levels and dataframe to house all of the drought counts of each intensity level 
+  intensity_levels <- c('D0', 'D1', 'D2', 'D3', 'D4')
+  return_intervals <- data.frame(
+    intensity = character(),
+    count = integer(),
+    return_interval = numeric(),
+    stringsAsFactors = FALSE
+  )
+  
+  # loop through each level of drought we want to took at 
+  for (level in intensity_levels) {
+    # count the number of drought events in that category
+    count <- sum(drought_events$max_intensity_label == level, na.rm = TRUE)
+    # if there is at least one event in that category
+    if (count >= 1) {
+      # calculate the return interval 
+      ri <- 2018 / count
+      # add information to existing drought counts data frame
+      return_intervals <- rbind(return_intervals, 
+                                data.frame(intensity = level, 
+                                           count = count, 
+                                           return_interval = ri))
+    }
+  }
+  # if you want to capture only the most severe drought events
+  if(only_severe){
+    # capture the drought events over a certain severity threshold 
+    drought_events <- drought_events %>%
+      filter(min_intensity >= severity_num)
+    return_intervals <- return_intervals %>% 
+      filter(intensity >= severity_level)
+  }
+  else{
+    return(list(Droughts = drought_events, Intervals = return_intervals))
+  }
+}
+
+
+# This Function plots predicted PMDI data by year
+plot.pdsi <- function(pmdi.predictions, predicted.col.name,
+                      name.string, year, save = FALSE){
+  
+  # create plot for the predicted values
+  pred.plot <-  ggplot(pmdi.predictions, aes(x = bin.x, y = bin.y, fill = .data[[predicted.col.name]])) +
+    geom_tile() +
+    scale_fill_gradient2(high = "white", 
+                          mid = "#E6B940", 
+                          low = "#8E1C14") +
+    theme_minimal()  +
+    labs(title = paste0("Historical PMDI Across Continental US for ", year)) +
+    theme(plot.title = element_text(face = "bold", size = 13, hjust = 0.5), 
+          axis.text = element_blank(), 
+          axis.ticks = element_blank(), 
+          axis.title = element_blank(),
+          legend.background = element_rect(fill = "white", color = "gray50"),
+          legend.key.size = unit(0.8, "cm"),
+          legend.key = element_rect(color = "gray50"))
+  us_outline <- map_data("usa")
+  
+  pred.plot <- pred.plot + geom_path(data = us_outline, aes(x = long, y = lat, group = group), 
+                                     color = "black", linewidth = 0.7, inherit.aes = FALSE)
+  return(pred.plot)
+  
+  if(save){
+    ggsave(pred.plot, file = paste0("C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/Plots/", name.string, ".png"))
+  }
+}
 
 # This Function plots predicted PMDI data by year
 plot.pmdi <- function(pmdi.predictions, predicted.col.name,
@@ -26,7 +172,7 @@ plot.pmdi <- function(pmdi.predictions, predicted.col.name,
                                  "D3" = "#C9281C", 
                                  "D4" = "#8E1C14")) +
     theme_minimal()  +
-    labs(title = paste0("Actual Average USDM Across Continental US for ", year)) +
+    labs(title = paste0("Predicted USDM Across Continental US for ", year)) +
     theme(plot.title = element_text(face = "bold", size = 13, hjust = 0.5), 
           axis.text = element_blank(), 
           axis.ticks = element_blank(), 
@@ -38,7 +184,7 @@ plot.pmdi <- function(pmdi.predictions, predicted.col.name,
   
   pred.plot <- pred.plot + geom_path(data = us_outline, aes(x = long, y = lat, group = group), 
                                color = "black", linewidth = 0.7, inherit.aes = FALSE)
-  pred.plot
+  return(pred.plot)
   
   if(save){
     ggsave(pred.plot, file = paste0("C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/Plots/", name.string, ".png"))

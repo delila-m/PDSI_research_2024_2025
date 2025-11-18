@@ -475,6 +475,9 @@ pmdi_current_aRQA <- crqa(pmdi_current, pmdi_current,
                           delay = 1, embed = 1, rescale = 0,
                           radius = 0, normalize = 0, mindiagline = 2,
                           minvertline = 2, datatype = "categorical")
+
+
+
 #####
 
 # spatial autocorrelation into model 
@@ -487,5 +490,16 @@ pmdi_current_aRQA <- crqa(pmdi_current, pmdi_current,
 # look at hurricane recurrence intervals for examples 
 
 
-
+# loop to calcualte drought duration and severity 
+dorught_counts <- data.frame()
+for index in pmdi_one_cell{
+  dorught_counts <- mutate(
+    length = case_when(
+      predictions == "None" ~ (2018+1)/ 6,
+      predictions == "D0" ~ (2018+1)/ 5,
+      predictions == "D1" ~ (2018+1)/ 4,
+      predictions == "D2" ~ (2018+1)/ 3,
+      predictions == "D3" ~ (2018+1)/ 2,
+      predictions == "D4" ~
+}
 
