@@ -1,8 +1,13 @@
 library(dplyr)
 library(tidyverse)
+# load in drought functions
+setwd("C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/Functions/")
+source("drought_functions.R")
 
 # file path on laptop
 load("C:/Users/delil/Desktop/NAU/Research 2024-2025/PDSI_research_2024_2025/Data/PMDIPredictionSet.Rdata")
+# file path in glg
+load("C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/Data/PMDIPredictionSet.Rdata")
 
 pmdi_one_cell <- pmdi_prediction_set %>%
   filter(bin.x == -113.75 & bin.y == 35.25) %>%
@@ -77,11 +82,8 @@ for (level in intensity_levels) {
                                          return_interval = ri))
   }
 }
-n_drought_events <- nrow(drought_events)
-
 severe_droughts <- drought_events %>%
   filter(max_intensity >= 3)  # D2 and above
-
 
 # Calculate return intervals for different duration thresholds
 duration_values <- sort(unique(severe_droughts$duration))
@@ -128,6 +130,17 @@ plota <- ggplot(plot_data, aes(x = duration)) +
   )
 
 plota
+
+# test functionality of above operations 
+cropped_test <- crop.cell(pmdi_prediction_set, xbin = -113.75, ybin = 35.25, "USDM_Factor")
+drought_events_test <- identify.drought(cropped_test)
+list_test <- summarize.drought.events(drought_events_test)
+drought_events_test2 <- list_test$Droughts
+drought_intervals_test <- list_test$Intervals
+
+full_test <- evaluate.recurrence(pmdi_prediction_set, xbin = -113.75, ybin = 35.25)
+
+test_plot <- plot.duration.v.return(full_test$Drought_events)
 
 # power law 
 # functionalize approach 

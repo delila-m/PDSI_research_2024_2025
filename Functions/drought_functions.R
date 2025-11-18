@@ -11,16 +11,86 @@ library(caret)
 library(lubridate)
 library(patchwork)
 
+# This function uses prior calculated recurrence intervals to create 
+  # a plot of drought duraton vs the return interval 
+  # it takes in the drought events set cleaned using the evaluate.recurrence function below 
+plot.duration.v.return <- function(severe_droughts){
+  # Calculate return intervals for different duration thresholds
+  duration_values <- sort(unique(severe_droughts$duration))
+  
+  # Create data for two lines:
+  # Line 1: Number of drought events by duration
+  # Line 2: Return interval by duration
+  plot_data <- data.frame()
+  
+  for (dur in duration_values) {
+    count <- sum(severe_droughts$duration >= dur)
+    ri <- 2018 / count
+    plot_data <- rbind(plot_data, 
+                       data.frame(duration = dur,
+                                  count = count,
+                                  return_interval = ri))
+  }
+  
+  plota <- ggplot(plot_data, aes(x = duration)) +
+    geom_line(aes(y = count, color = "Number of Events"), size = 1.2) +
+    geom_point(aes(y = count, color = "Number of Events"), size = 3) +
+    geom_line(aes(y = return_interval, color = "Return Interval"), size = 1.2) +
+    geom_point(aes(y = return_interval, color = "Return Interval"), size = 3) +
+    scale_color_manual(values = c("Number of Events" = "blue", 
+                                  "Return Interval" = "red")) +
+    labs(
+      title = "Drought Duration vs Return Interval",
+      subtitle = "For drought events >= D2",
+      x = "Drought Duration (years)",
+      y = "Years",
+      color = "Metric"
+    ) +
+    #scale_x_log10()+
+    scale_y_log10()+
+    theme_minimal() +
+    theme(
+      panel.grid.major = element_line(color = "gray80"),
+      panel.grid.minor = element_line(color = "gray90"),
+      plot.title = element_text(size = 16, face = "bold"),
+      axis.title = element_text(size = 12),
+      axis.text = element_text(size = 10),
+      legend.position = "bottom"
+    )
+  
+  return(plota)
+}
+
+# This function combines the functionality of the below 3 operations to:
+  # crop a dataframe to one cell,
+  # identify drought events over a certain threshold of severity, 
+  # evaluate different statistics about each unique drought event, and 
+  # find the return intervals for each drought severity level 
+evaluate.recurrence <- function(pmdi.set, xbin, ybin, pred_col,  
+                                intensity_treshold = 2, 
+                                  only_severe = FALSE, 
+                                  severity_num = 2, severity_level = "D0"){
+  cropped_pmdi <- crop.cell(pmdi_prediction_set, xbin, ybin)
+  drought_identified <- identify.drought(cropped_pmdi, intensity_treshold)
+  drought_list <- summarize.drought.events(drought_identified, only_severe = FALSE, 
+                                        severity_num, severity_level)
+  drought_events <- drought_list$Droughts
+  drought_intervals <- drought_list$Intervals
+  return(list(Original_set = drought_identified, 
+              Drought_events = drought_events, 
+              Return_intervals = drought_intervals))
+}
+
 # This function crops a dataframe to one cell given coordinates and creates a column of numerical equivalents of drought categories 
-crop.cell(pmdi.set, xbin, ybin){
+crop.cell <- function(pmdi.set, xbin, ybin, pred_col){
   pmdi_one_cell <- pmdi.set %>%
     filter(bin.x == xbin & bin.y == ybin) %>%
-    mutate(intensity = case_when(predictions == "None" ~ 1,
-                                 predictions == "D0" ~ 2,
-                                 predictions == "D1" ~ 3,
-                                 predictions == "D2" ~ 4,
-                                 predictions == "D3" ~ 5,
-                                 predictions == "D4" ~ 6,
+    mutate(intensity = case_when(pred_col == "None" ~ 1,
+                                 pred_col == "D0" ~ 2,
+                                 pred_col == "D1" ~ 3,
+                                 pred_col == "D2" ~ 4,
+                                 pred_col == "D3" ~ 5,
+                                 pred_col == "D4" ~ 6,
                                  TRUE ~ -1 ))
   return(pmdi_one_cell)
 }
@@ -28,7 +98,7 @@ crop.cell(pmdi.set, xbin, ybin){
 # This Function identifies drought events over a certain threshold and connects 
   # them to a drought ID
   # was created with help from GAI which helped me with the looping process 
-identify.drought(pmdi_one_cell, intensity_treshold = 2){
+identify.drought <- function(pmdi_one_cell, intensity_treshold = 2){
   # Define drought intensity mapping
   drought_map <- c('None' = 1, 'D0' = 2, 'D1' = 3, 'D2' = 4, 'D3' = 5, 'D4' = 6)
   
@@ -62,16 +132,18 @@ identify.drought(pmdi_one_cell, intensity_treshold = 2){
   # a given drought event, and finds the return intervals of each drought category
   # This function returns a list of said drought events and return intervals, 
     # with the option of returning only the most severe droughts 
-summarize.drought.events(pmdi_one_cell, only_severe = FALSE, severity_level){
-  
+summarize.drought.events <- function(pmdi_one_cell, only_severe = FALSE, 
+                                     severity_num, severity_level, time_col){
   # Calculate drought event statistics
   drought_events <- pmdi_one_cell %>%
     filter(!is.na(drought_id)) %>%
     group_by(drought_id) %>%
     summarise(
-      start_year = first(year),
-      end_year = last(year),
-      duration = n(),
+      start_time = first(time_col),
+      end_time = last(time_col),
+      duration = if(time_col == "year")
+        {n()}
+        else{n},
       avg_intensity = mean(intensity),
       max_intensity = max(intensity),
       min_intensity = min(intensity), 
