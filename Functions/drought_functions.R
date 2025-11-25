@@ -9,7 +9,133 @@ library(ncdf4)
 library(randomForest)
 library(caret)
 library(lubridate)
+library(ggplot2)
 library(patchwork)
+
+
+# Modified function with error handling for cells with no drought events
+plot.duration.v.return.combined <- function(prediction_set, n_cells = 9, 
+                                            seed = 123, pred_col = "predictions", 
+                                            time_col = "year") {
+  
+  library(ggplot2)
+  
+  # Get unique cell combinations
+  unique_cells <- unique(prediction_set[, c("bin.x", "bin.y")])
+  
+  # Randomly sample cells
+  set.seed(seed)
+  sampled_indices <- sample(1:nrow(unique_cells), n_cells)
+  sampled_cells <- unique_cells[sampled_indices, ]
+  
+  # Initialize dataframe to store all plot data
+  all_plot_data <- data.frame()
+  
+  # Counter for successfully processed cells
+  successful_cells <- 0
+  
+  # Loop through each sampled cell
+  for(i in 1:n_cells) {
+    # Get cell coordinates
+    xbin <- sampled_cells$bin.x[i]
+    ybin <- sampled_cells$bin.y[i]
+    
+    # Run evaluation function
+    full_test <- evaluate.recurrence(prediction_set, 
+                                     xbin = xbin, 
+                                     ybin = ybin, 
+                                     pred_col = pred_col, 
+                                     time_col = time_col)
+    
+    # Get drought events
+    severe_droughts <- full_test$Drought_events
+    
+    # Check if there are any drought events
+    if(nrow(severe_droughts) == 0 || all(is.na(severe_droughts$duration))) {
+      cat("Cell", i, "(", xbin, ",", ybin, ") has no drought events. Skipping...\n")
+      next
+    }
+    
+    # Calculate return intervals for this cell
+    duration_values <- sort(unique(severe_droughts$duration))
+    duration_values <- duration_values[!is.na(duration_values)]
+    
+    if(length(duration_values) == 0) {
+      cat("Cell", i, "(", xbin, ",", ybin, ") has no valid duration values. Skipping...\n")
+      next
+    }
+    
+    plot_data <- data.frame()
+    
+    for (dur in duration_values) {
+      count <- sum(severe_droughts$duration >= dur, na.rm = TRUE)
+      if(count > 0) {
+        ri <- 2018 / count
+        plot_data <- rbind(plot_data, 
+                           data.frame(duration = dur,
+                                      count = count,
+                                      return_interval = ri))
+      }
+    }
+    
+    # Check if plot_data has any rows before adding cell_id
+    if(nrow(plot_data) > 0) {
+      # Add cell identifier
+      plot_data$cell_id <- paste0("Cell ", successful_cells + 1, " (", round(xbin, 1), ", ", round(ybin, 1), ")")
+      
+      # Combine with all data
+      all_plot_data <- rbind(all_plot_data, plot_data)
+      
+      successful_cells <- successful_cells + 1
+      
+      # Print progress
+      cat("Successfully processed cell", i, "(", xbin, ",", ybin, ")\n")
+    } else {
+      cat("Cell", i, "(", xbin, ",", ybin, ") produced no valid data. Skipping...\n")
+    }
+  }
+  
+  # Check if we have any data to plot
+  if(nrow(all_plot_data) == 0) {
+    stop("No cells with drought events were found. Try increasing n_cells or using a different seed.")
+  }
+  
+  cat("\nSuccessfully processed", successful_cells, "cells out of", n_cells, "sampled.\n")
+  
+  # Create combined plot
+  combined_plot <- ggplot(all_plot_data, aes(x = duration, y = return_interval, color = cell_id)) +
+    geom_line(linewidth = 1.2) +
+    geom_point(size = 2, alpha = 0.7) +
+    labs(
+      title = paste("Drought Duration vs Return Interval for", successful_cells, "Cells"),
+      subtitle = "For drought events >= D2",
+      x = "Drought Duration (years)",
+      y = "Return Interval (years)",
+      color = "Cell Location"
+    ) +
+    scale_y_log10() +
+    theme_minimal() +
+    theme(
+      panel.grid.major = element_line(color = "gray80"),
+      panel.grid.minor = element_line(color = "gray90"),
+      plot.title = element_text(size = 16, face = "bold"),
+      plot.subtitle = element_text(size = 12),
+      axis.title = element_text(size = 12),
+      axis.text = element_text(size = 10),
+      legend.position = "right"
+    )
+  
+  # Return both the plot and the data
+  return(list(
+    plot = combined_plot,
+    data = all_plot_data,
+    sampled_cells = sampled_cells,
+    successful_count = successful_cells
+  ))
+}
+
+
+
 
 # This function uses prior calculated recurrence intervals to create 
   # a plot of drought duraton vs the return interval 
@@ -33,12 +159,11 @@ plot.duration.v.return <- function(severe_droughts){
   }
   
   plota <- ggplot(plot_data, aes(x = duration)) +
-    geom_line(aes(y = count, color = "Number of Events"), size = 1.2) +
-    geom_point(aes(y = count, color = "Number of Events"), size = 3) +
-    geom_line(aes(y = return_interval, color = "Return Interval"), size = 1.2) +
-    geom_point(aes(y = return_interval, color = "Return Interval"), size = 3) +
-    scale_color_manual(values = c("Number of Events" = "blue", 
-                                  "Return Interval" = "red")) +
+    #geom_line(aes(y = count, color = "Number of Events"), linewidth = 1.2) +
+    #geom_point(aes(y = count, color = "Number of Events"), linewidth = 3) +
+    geom_line(aes(y = return_interval, color = "Return Interval"), linewidth = 1.2) +
+    geom_point(aes(y = return_interval, color = "Return Interval"), linewidth = 3) +
+    scale_color_manual(values = c("Return Interval" = "red")) +
     labs(
       title = "Drought Duration vs Return Interval",
       subtitle = "For drought events >= D2",
@@ -67,13 +192,13 @@ plot.duration.v.return <- function(severe_droughts){
   # evaluate different statistics about each unique drought event, and 
   # find the return intervals for each drought severity level 
 evaluate.recurrence <- function(pmdi.set, xbin, ybin, pred_col,  
-                                intensity_treshold = 2, 
+                                intensity_threshold = 2, 
                                   only_severe = FALSE, 
-                                  severity_num = 2, severity_level = "D0"){
-  cropped_pmdi <- crop.cell(pmdi_prediction_set, xbin, ybin)
-  drought_identified <- identify.drought(cropped_pmdi, intensity_treshold)
+                                  severity_num = 2, severity_level = "D0", time_col){
+  cropped_pmdi <- crop.cell(pmdi_prediction_set, xbin, ybin, pred_col)
+  drought_identified <- identify.drought(cropped_pmdi, intensity_threshold)
   drought_list <- summarize.drought.events(drought_identified, only_severe = FALSE, 
-                                        severity_num, severity_level)
+                                        severity_num, severity_level, time_col)
   drought_events <- drought_list$Droughts
   drought_intervals <- drought_list$Intervals
   return(list(Original_set = drought_identified, 
@@ -85,23 +210,20 @@ evaluate.recurrence <- function(pmdi.set, xbin, ybin, pred_col,
 crop.cell <- function(pmdi.set, xbin, ybin, pred_col){
   pmdi_one_cell <- pmdi.set %>%
     filter(bin.x == xbin & bin.y == ybin) %>%
-    mutate(intensity = case_when(pred_col == "None" ~ 1,
-                                 pred_col == "D0" ~ 2,
-                                 pred_col == "D1" ~ 3,
-                                 pred_col == "D2" ~ 4,
-                                 pred_col == "D3" ~ 5,
-                                 pred_col == "D4" ~ 6,
-                                 TRUE ~ -1 ))
+    mutate(intensity = case_when(.data[[pred_col]] == "None" ~ 1,
+                                 .data[[pred_col]] == "D0" ~ 2,
+                                 .data[[pred_col]] == "D1" ~ 3,
+                                 .data[[pred_col]] == "D2" ~ 4,
+                                 .data[[pred_col]] == "D3" ~ 5,
+                                 .data[[pred_col]] == "D4" ~ 6,
+                                 TRUE ~ -1))
   return(pmdi_one_cell)
 }
 
 # This Function identifies drought events over a certain threshold and connects 
   # them to a drought ID
   # was created with help from GAI which helped me with the looping process 
-identify.drought <- function(pmdi_one_cell, intensity_treshold = 2){
-  # Define drought intensity mapping
-  drought_map <- c('None' = 1, 'D0' = 2, 'D1' = 3, 'D2' = 4, 'D3' = 5, 'D4' = 6)
-  
+identify.drought <- function(pmdi_one_cell, intensity_treshold = 3){
   # Identify drought events (any value >= the given threshold)
   pmdi_one_cell$is_drought <- pmdi_one_cell$intensity >= intensity_treshold
   
@@ -134,16 +256,17 @@ identify.drought <- function(pmdi_one_cell, intensity_treshold = 2){
     # with the option of returning only the most severe droughts 
 summarize.drought.events <- function(pmdi_one_cell, only_severe = FALSE, 
                                      severity_num, severity_level, time_col){
+  # Define drought intensity mapping
+  drought_map <- c('None' = 1, 'D0' = 2, 'D1' = 3, 'D2' = 4, 'D3' = 5, 'D4' = 6)
+  
   # Calculate drought event statistics
   drought_events <- pmdi_one_cell %>%
     filter(!is.na(drought_id)) %>%
     group_by(drought_id) %>%
     summarise(
-      start_time = first(time_col),
-      end_time = last(time_col),
-      duration = if(time_col == "year")
-        {n()}
-        else{n},
+      start_time = first(.data[[time_col]]),
+      end_time = last(.data[[time_col]]),
+      duration = n(),
       avg_intensity = mean(intensity),
       max_intensity = max(intensity),
       min_intensity = min(intensity), 

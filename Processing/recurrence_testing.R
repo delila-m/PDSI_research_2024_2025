@@ -1,7 +1,8 @@
 library(dplyr)
 library(tidyverse)
 # load in drought functions
-setwd("C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/Functions/")
+setwd("C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/Functions/") #glg
+setwd("C:/Users/delil/Desktop/NAU/Research 2024-2025/PDSI_research_2024_2025/Functions/") #laptop
 source("drought_functions.R")
 
 # file path on laptop
@@ -132,15 +133,72 @@ plota <- ggplot(plot_data, aes(x = duration)) +
 plota
 
 # test functionality of above operations 
-cropped_test <- crop.cell(pmdi_prediction_set, xbin = -113.75, ybin = 35.25, "USDM_Factor")
+cropped_test <- crop.cell(pmdi_prediction_set, xbin = -113.75, ybin = 35.25, pred_col = "predictions")
 drought_events_test <- identify.drought(cropped_test)
-list_test <- summarize.drought.events(drought_events_test)
-drought_events_test2 <- list_test$Droughts
-drought_intervals_test <- list_test$Intervals
+list_test <- summarize.drought.events(drought_events_test, time_col = "year")
+drought_events_test2 <- list_test[[1]]
+drought_intervals_test <- list_test[[2]]
 
-full_test <- evaluate.recurrence(pmdi_prediction_set, xbin = -113.75, ybin = 35.25)
+full_test <- evaluate.recurrence(pmdi_prediction_set, xbin = -113.75, ybin = 35.25, 
+                                 pred_col = "predictions", time_col = "year")
+
+
+full_drought_events_test2 <- full_test[[2]]
+full_drought_intervals_test <- full_test[[3]]
 
 test_plot <- plot.duration.v.return(full_test$Drought_events)
+
+# Load required library for plot arrangement
+library(gridExtra)
+
+# Get unique cell combinations
+unique_cells <- unique(pmdi_prediction_set[, c("bin.x", "bin.y")])
+
+# Randomly sample 9 cells
+set.seed(123)  
+sampled_indices <- sample(1:nrow(unique_cells), 9)
+sampled_cells <- unique_cells[sampled_indices, ]
+
+# Initialize list to store plots
+plot_list <- list()
+all_drought_data <- list()
+
+
+# Loop through each sampled cell
+for(i in 1:9) {
+  # Get cell coordinates
+  xbin <- sampled_cells$bin.x[i]
+  ybin <- sampled_cells$bin.y[i]
+  
+  # Run your evaluation function
+  full_test <- evaluate.recurrence(pmdi_prediction_set, 
+                                   xbin = xbin, 
+                                   ybin = ybin, 
+                                   pred_col = "predictions", 
+                                   time_col = "year")
+  
+  # Generate plot
+  test_plot <- plot.duration.v.return(full_test$Drought_events)
+  
+  # Store plot in list
+  plot_list[[i]] <- test_plot
+
+  # print progress
+  cat("Processed cell", i, "of 9: (", xbin, ",", ybin, ")\n")
+}
+
+# Arrange all plots in a 3x3 grid
+grid.arrange(grobs = plot_list, ncol = 3, nrow = 3)
+
+
+# Use the function - you may want to increase n_cells to ensure you get 9 successful ones
+result <- plot.duration.v.return.combined(pmdi_prediction_set, n_cells = 15, 
+                                          seed = 123,  
+                                          pred_col = "predictions", 
+                                          time_col = "year")
+
+# Display the plot
+print(result$plot)
 
 # power law 
 # functionalize approach 
