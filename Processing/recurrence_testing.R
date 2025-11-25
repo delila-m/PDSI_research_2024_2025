@@ -10,6 +10,10 @@ load("C:/Users/delil/Desktop/NAU/Research 2024-2025/PDSI_research_2024_2025/Data
 # file path in glg
 load("C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/Data/PMDIPredictionSet.Rdata")
 
+# Previous categorical model for comparison 
+setwd("C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/Data/UpdatedCleaned_0.5")
+load("RFAnalysis0.5_factor_updated.Rdata")
+
 pmdi_one_cell <- pmdi_prediction_set %>%
   filter(bin.x == -113.75 & bin.y == 35.25) %>%
   mutate(intensity = case_when(predictions == "None" ~ 1,
@@ -192,19 +196,48 @@ grid.arrange(grobs = plot_list, ncol = 3, nrow = 3)
 
 
 # Use the function - you may want to increase n_cells to ensure you get 9 successful ones
-result <- plot.duration.v.return.combined(pmdi_prediction_set, n_cells = 15, 
+result <- plot.duration.v.return.combined(train_0.5, n_cells = 15, 
                                           seed = 123,  
-                                          pred_col = "predictions", 
-                                          time_col = "year")
+                                          pred_col = "predicted", 
+                                          time_col = "Date")
 
 # Display the plot
 print(result$plot)
+
+# Slice weekly data for use on laptop
+unique_cells <- unique(test_0.5[, c("bin.x", "bin.y")])
+set.seed(123)
+sampled_indices <- sample(1:nrow(unique_cells), 50)
+sampled_cells <- unique_cells[sampled_indices, ]
+weekly_PDSI_Sampled_0.5 <- test_0.5 %>%
+  semi_join(sampled_cells, by = c("bin.x", "bin.y")) 
+
+save(weekly_PDSI_Sampled_0.5, file = "C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/Data/SampledWeekly_0.5.RData")
+
+# testing for weekly data 
+cropped_test_weekly <- crop.cell(sampled_cells, xbin = -113.5, ybin = 35.5, pred_col = "predicted")
+drought_events_test <- identify.drought(cropped_test_weekly)
+list_test <- summarize.drought.events(drought_events_test, time_col = "Date", pred_col = "predicted")
+drought_events_test2 <- list_test[[1]]
+drought_intervals_test <- list_test[[2]]
+
+full_test <- evaluate.recurrence(test_0.5, xbin = -113.75, ybin = 35.25, 
+                                 pred_col = "predicted", time_col = "Date")
+
+
+full_drought_events_test2 <- full_test[[2]]
+full_drought_intervals_test <- full_test[[3]]
+
+test_plot <- plot.duration.v.return(list_test$Droughts)
+
 
 # power law 
 # functionalize approach 
 # weekly data making the same plots with the same gridcell 
 
 # random samples for 10 cells around the country- possibly put lines all on the same plot 
+# fun for everything and map out slopes 
+
 
 
 

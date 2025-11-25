@@ -195,7 +195,7 @@ evaluate.recurrence <- function(pmdi.set, xbin, ybin, pred_col,
                                 intensity_threshold = 2, 
                                   only_severe = FALSE, 
                                   severity_num = 2, severity_level = "D0", time_col){
-  cropped_pmdi <- crop.cell(pmdi_prediction_set, xbin, ybin, pred_col)
+  cropped_pmdi <- crop.cell(pmdi.set, xbin, ybin, pred_col)
   drought_identified <- identify.drought(cropped_pmdi, intensity_threshold)
   drought_list <- summarize.drought.events(drought_identified, only_severe = FALSE, 
                                         severity_num, severity_level, time_col)
@@ -255,7 +255,8 @@ identify.drought <- function(pmdi_one_cell, intensity_treshold = 3){
   # This function returns a list of said drought events and return intervals, 
     # with the option of returning only the most severe droughts 
 summarize.drought.events <- function(pmdi_one_cell, only_severe = FALSE, 
-                                     severity_num, severity_level, time_col){
+                                     severity_num, severity_level, time_col, 
+                                     pred_col){
   # Define drought intensity mapping
   drought_map <- c('None' = 1, 'D0' = 2, 'D1' = 3, 'D2' = 4, 'D3' = 5, 'D4' = 6)
   
@@ -266,12 +267,17 @@ summarize.drought.events <- function(pmdi_one_cell, only_severe = FALSE,
     summarise(
       start_time = first(.data[[time_col]]),
       end_time = last(.data[[time_col]]),
-      duration = n(),
+      if(time_col == "year"){
+        duration = n()
+      }
+      else{
+        durations = (n()*5)
+      },
       avg_intensity = mean(intensity),
       max_intensity = max(intensity),
       min_intensity = min(intensity), 
       avg_PDSI = mean(PDSI_Avg),
-      drought_sequence = paste(predictions, collapse = ", "),
+      drought_sequence = paste(.data[[pred_col]], collapse = ", "),
       .groups = 'drop'
     )
   # Add max intensity label with actual drought categories 
