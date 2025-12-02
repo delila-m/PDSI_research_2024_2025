@@ -181,25 +181,32 @@ pmdi_test <- pmdi_prediction_set %>%
 pmdi_test_10 <- pmdi_prediction_set %>%
   semi_join(pmdi_test, by = c("bin.x", "bin.y"))
 
-us_slopes <- data.frame()
+
+#create a data.frame of unique X/Y pairs to loop through
+latlongpairs <- pmdi_prediction_set %>%
+  distinct(bin.x, bin.y)
+
 
 ################# issues in this loop here
-for(index in pmdi_test){
-    print(paste(pmdi_test$bin.x, pmdi_test$bin.y))
+for(index in latlongpairs){
+    print(paste(latlongpairs$bin.x, latlongpairs$bin.y))
   }
 
 # add a progress bar
-pb <- txtProgressBar(min = 0, max = nrow(pmdi_test), style = 3)
+us_slopes <- data.frame()
+
+pb <- txtProgressBar(min = 0, max = nrow(latlongpairs), style = 3)
+
 
 # now loop through the whole country
-for(index in 1:nrow(pmdi_test)){
+for(index in 1:nrow(latlongpairs)){
 
   # grab the cell coordinates
-  current_xbin = pmdi_test_10$bin.x[index]
-  current_ybin = pmdi_test_10$bin.y[index]
+  current_xbin = latlongpairs$bin.x[index]
+  current_ybin = latlongpairs$bin.y[index]
 
   # evaluate the recurrence intervals for that cell
-  recurrence_list <- evaluate.recurrence(pmdi_test_10, xbin = current_xbin,
+  recurrence_list <- evaluate.recurrence(pmdi_prediction_set, xbin = current_xbin,
                                          ybin = current_ybin,
                                          intensity_threshold = 2,
                                          pred_col = "predictions", time_col = "year")
@@ -216,11 +223,11 @@ for(index in 1:nrow(pmdi_test)){
 
     # grab the plotting data and find the slope
     intervals <- plot.data(drought_events)
-    print(intervals)
+    #print(intervals)
     # make sure that there are drought events with at least two different durations
     if(nrow(intervals) > 0 && max(intervals$duration) >= 2){
       slope <- recurrence.slope(intervals)
-      print(slope)
+     # print(slope)
       # add it all to the existing data frame
       us_slopes <- bind_rows(us_slopes,
                              data.frame(xbin = current_xbin,
