@@ -22,6 +22,7 @@ library(patchwork)
 
 
 
+
 # Modified function with error handling for cells with no drought events
 plot.duration.v.return.combined <- function(prediction_set, n_cells = 9, 
                                             seed = 123, pred_col = "predictions", 
@@ -174,7 +175,7 @@ plot.data <- function(severe_droughts){
 recurrence.slope <- function(plot_data){
   # create a linear model using the grouped plotting data, take the log of the return interval to highlight the linear relationship
   recurrence_lm <- lm(log10(return_interval) ~ duration, data = plot_data)
-  
+
   # grab the slope, intercept, and rsquared to return
   slope <- recurrence_lm$coefficients[2]
   intercept <- recurrence_lm$coefficients[1]
@@ -233,7 +234,7 @@ evaluate.recurrence <- function(pmdi.set, xbin, ybin, pred_col,
                                   severity_num = 2, severity_level = "D0", time_col){
   cropped_pmdi <- crop.cell(pmdi.set, xbin, ybin, pred_col)
   drought_identified <- identify.drought(cropped_pmdi, intensity_threshold)
-  
+
   # check to make sure there are actually drought events over our threshold in this cell 
   if(sum(drought_identified$is_drought) >= 2){
     drought_list <- summarize.drought.events(drought_identified, only_severe = FALSE, 
@@ -250,6 +251,7 @@ evaluate.recurrence <- function(pmdi.set, xbin, ybin, pred_col,
                 Drought_events = NA, 
                 Return_intervals = NA))
   }
+
 }
 
 # This function crops a dataframe to one cell given coordinates and creates a column of numerical equivalents of drought categories 

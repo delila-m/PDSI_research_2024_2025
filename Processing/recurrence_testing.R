@@ -18,7 +18,6 @@ load("RFAnalysis0.5_factor_updated.Rdata")
 load("C:/Users/delil/Desktop/NAU/Research 2024-2025/PDSI_research_2024_2025/Data/SampledWeekly_0.5.RData")#laptop
 load("C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/Data/SampledWeekly_0.5.RData")#glg
 
-
 pmdi_one_cell <- pmdi_prediction_set %>%
   filter(bin.x == -113.75 & bin.y == 35.25) %>%
   mutate(intensity = case_when(predictions == "None" ~ 1,
@@ -145,6 +144,7 @@ plota
   # test all separated out 
 cropped_test <- crop.cell(pmdi_prediction_set, xbin = -124.25, ybin = 40.25, pred_col = "predictions")
 drought_events_test <- identify.drought(cropped_test, intensity_treshold = 4)
+
 list_test <- summarize.drought.events(drought_events_test, time_col = "year", pred_col = "predictions")
                                      # duration_unit = "years")
 drought_events_test2 <- list_test[[1]]
@@ -176,12 +176,13 @@ test_plot
 pmdi_test <- pmdi_prediction_set %>% 
   distinct(bin.x, bin.y) %>% 
   slice(100:110)
+
 pmdi_test_10 <- pmdi_prediction_set %>% 
   semi_join(pmdi_test, by = c("bin.x", "bin.y"))
 
 us_slopes <- data.frame()
 
-
+################# issues in this loop here
 for(index in pmdi_test){
     print(paste(pmdi_test$bin.x, pmdi_test$bin.y))
   }
