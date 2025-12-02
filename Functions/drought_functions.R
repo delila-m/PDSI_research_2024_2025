@@ -13,6 +13,15 @@ library(ggplot2)
 library(patchwork)
 
 
+# # This combines the evaluate.recurrence workflow with the
+#   # plot.data function to find the slope of the recurrence line
+# find.slope <- function(pmdi.set, xbin, ybin, pred_col,  
+#                        intensity_threshold = 2, 
+#                        only_severe = FALSE, 
+#                        severity_num = 2, severity_level = "D0", time_col){}
+
+
+
 # Modified function with error handling for cells with no drought events
 plot.duration.v.return.combined <- function(prediction_set, n_cells = 9, 
                                             seed = 123, pred_col = "predictions", 
@@ -136,31 +145,58 @@ plot.duration.v.return.combined <- function(prediction_set, n_cells = 9,
 
 
 
-
-# This function uses prior calculated recurrence intervals to create 
-  # a plot of drought duraton vs the return interval 
-  # it takes in the drought events set cleaned using the evaluate.recurrence function below 
-plot.duration.v.return <- function(severe_droughts){
+plot.data <- function(severe_droughts){
+  
   # Calculate return intervals for different duration thresholds
   duration_values <- sort(unique(severe_droughts$duration))
   
-  # Create data for two lines:
-  # Line 1: Number of drought events by duration
-  # Line 2: Return interval by duration
+  # initialize dataframe 
   plot_data <- data.frame()
   
+  # loop through each duration 
   for (dur in duration_values) {
+    # count the number of severe droughts less than or equal to the given duration 
     count <- sum(severe_droughts$duration >= dur)
+    # calculate the return interval 
     ri <- 2018 / count
+    # add it all to a dataframe to return 
     plot_data <- rbind(plot_data, 
                        data.frame(duration = dur,
                                   count = count,
                                   return_interval = ri))
   }
+  return(plot_data)
+}
+
+# This function calculates the slope of drought recurrence: duration vs. years
+  # uses previously calculated plotting data 
+  # returns the slope, intercept, and rsquared. 
+recurrence.slope <- function(plot_data){
+  # create a linear model using the grouped plotting data, take the log of the return interval to highlight the linear relationship
+  recurrence_lm <- lm(log10(return_interval) ~ duration, data = plot_data)
   
+  # grab the slope, intercept, and rsquared to return
+  slope <- recurrence_lm$coefficients[2]
+  intercept <- recurrence_lm$coefficients[1]
+  rsquared <- summary(recurrence_lm)$r.squared
+  
+  # return it all 
+  return(list(
+    data = plot_data,
+    slope = slope,
+    intercept = intercept,
+    r_squared = rsquared
+  ))
+  
+}
+
+
+# This function uses prior calculated recurrence intervals to create 
+  # a plot of drought duraton vs the return interval 
+  # it takes in the drought events set cleaned using the evaluate.recurrence function below 
+plot.duration.v.return <- function(plot_data){
+  # broke the plotting data and actual plotting into two separate functions for debugging 
   plota <- ggplot(plot_data, aes(x = duration)) +
-    #geom_line(aes(y = count, color = "Number of Events"), linewidth = 1.2) +
-    #geom_point(aes(y = count, color = "Number of Events"), linewidth = 3) +
     geom_line(aes(y = return_interval, color = "Return Interval"), linewidth = 1.2) +
     geom_point(aes(y = return_interval, color = "Return Interval"), linewidth = 3) +
     scale_color_manual(values = c("Return Interval" = "red")) +
@@ -197,13 +233,23 @@ evaluate.recurrence <- function(pmdi.set, xbin, ybin, pred_col,
                                   severity_num = 2, severity_level = "D0", time_col){
   cropped_pmdi <- crop.cell(pmdi.set, xbin, ybin, pred_col)
   drought_identified <- identify.drought(cropped_pmdi, intensity_threshold)
-  drought_list <- summarize.drought.events(drought_identified, only_severe = FALSE, 
-                                        severity_num, severity_level, time_col)
-  drought_events <- drought_list$Droughts
-  drought_intervals <- drought_list$Intervals
-  return(list(Original_set = drought_identified, 
-              Drought_events = drought_events, 
-              Return_intervals = drought_intervals))
+  
+  # check to make sure there are actually drought events over our threshold in this cell 
+  if(sum(drought_identified$is_drought) >= 2){
+    drought_list <- summarize.drought.events(drought_identified, only_severe = FALSE, 
+                                             severity_num, severity_level, time_col, pred_col)
+    drought_events <- drought_list$Droughts
+    drought_intervals <- drought_list$Intervals
+    return(list(Original_set = drought_identified, 
+                Drought_events = drought_events, 
+                Return_intervals = drought_intervals))
+  }
+  # if there are no events, we need to return a null list
+  else{
+    return(list(Original_set = drought_identified, 
+                Drought_events = NA, 
+                Return_intervals = NA))
+  }
 }
 
 # This function crops a dataframe to one cell given coordinates and creates a column of numerical equivalents of drought categories 
@@ -246,9 +292,116 @@ identify.drought <- function(pmdi_one_cell, intensity_treshold = 3){
       pmdi_one_cell$drought_id[i] <- drought_event_id
     }
   }
-  # return ddataset
+  # return dataset
   return(pmdi_one_cell)
 }
+
+# This function groups by each drought event, summarizes different stats about 
+# a given drought event, and finds the return intervals of each drought category
+# This function returns a list of said drought events and return intervals, 
+# with the option of returning only the most severe droughts 
+summarize.drought.events <- function(pmdi_one_cell, only_severe = FALSE, 
+                                     severity_num, severity_level, time_col, 
+                                     pred_col, duration_unit = "observations"){
+  # Validate duration_unit parameter
+  valid_units <- c("observations", "days", "weeks", "months", "years")
+  if (!duration_unit %in% valid_units) {
+    stop("duration_unit must be one of: ", paste(valid_units, collapse = ", "))
+  }
+  
+  # Define drought intensity mapping
+  drought_map <- c('None' = 1, 'D0' = 2, 'D1' = 3, 'D2' = 4, 'D3' = 5, 'D4' = 6)
+  
+  # Calculate drought event statistics
+  drought_events <- pmdi_one_cell %>%
+    filter(!is.na(drought_id)) %>%
+    group_by(drought_id) %>%
+    summarise(
+      start_time = first(.data[[time_col]]),
+      end_time = last(.data[[time_col]]),
+      n_observations = n(),
+      avg_intensity = mean(intensity),
+      max_intensity = max(intensity),
+      min_intensity = min(intensity), 
+      avg_PDSI = mean(PDSI_Avg),
+      drought_sequence = paste(.data[[pred_col]], collapse = ", "),
+      .groups = 'drop'
+    )
+  
+  # Calculate duration based on selected unit
+  drought_events <- drought_events %>%
+    mutate(
+      duration = case_when(
+        duration_unit == "observations" ~ n_observations,
+        duration_unit == "days" ~ as.numeric(difftime(end_time, start_time, 
+                                                      units = "days")) + 1,
+        duration_unit == "weeks" ~ as.numeric(difftime(end_time, start_time, 
+                                                       units = "weeks")),
+        duration_unit == "months" ~ as.numeric(difftime(end_time, start_time, 
+                                                       units = "days")) / 30.44,
+        duration_unit == "years" ~ n_observations,
+        TRUE ~ NA_real_
+      ),
+      duration_unit = duration_unit
+    )
+  
+  # Add max intensity label with actual drought categories 
+  intensity_reverse_map <- names(drought_map)
+  names(intensity_reverse_map) <- drought_map
+  
+  drought_events$max_intensity_label <- intensity_reverse_map[as.character(drought_events$max_intensity)]
+  drought_events$avg_intensity_label <- intensity_reverse_map[as.character(round(drought_events$avg_intensity))]
+  drought_events$min_intensity_label <- intensity_reverse_map[as.character(drought_events$min_intensity)]
+  
+  # Return interval by drought intensity
+  # Calculate total time span for return interval calculation
+  time_diff <- as.numeric(difftime(max(pmdi_one_cell[[time_col]], na.rm = TRUE),
+                                   min(pmdi_one_cell[[time_col]], na.rm = TRUE),
+                                   units = "days"))
+  
+  total_time_span <- case_when(
+    duration_unit == "observations" ~ 2018,  # Keep original value for observations
+    duration_unit == "days" ~ time_diff,
+    duration_unit == "weeks" ~ time_diff / 7,
+    duration_unit == "months" ~ time_diff / 30.44,
+    duration_unit == "years" ~ 2018,
+    TRUE ~ NA_real_
+  )
+  
+  # Initialize drought levels and dataframe to house all drought counts
+  intensity_levels <- c('D0', 'D1', 'D2', 'D3', 'D4')
+  return_intervals <- data.frame(
+    intensity = character(),
+    count = integer(),
+    return_interval = numeric(),
+    time_unit = character(),
+    stringsAsFactors = FALSE
+  )
+  
+  # Loop through each level of drought
+  for (level in intensity_levels) {
+    count <- sum(drought_events$max_intensity_label == level, na.rm = TRUE)
+    if (count >= 1) {
+      ri <- total_time_span / count
+      return_intervals <- rbind(return_intervals, 
+                                data.frame(intensity = level, 
+                                           count = count, 
+                                           return_interval = ri,
+                                           time_unit = duration_unit))
+    }
+  }
+  
+  # Filter for severe droughts if requested
+  if(only_severe){
+    drought_events <- drought_events %>%
+      filter(min_intensity >= severity_num)
+    return_intervals <- return_intervals %>% 
+      filter(intensity >= severity_level)
+  }
+  
+  return(list(Droughts = drought_events, Intervals = return_intervals))
+}
+
 
 # This function groups by each drought event, summarizes different stats about 
   # a given drought event, and finds the return intervals of each drought category
@@ -267,12 +420,7 @@ summarize.drought.events <- function(pmdi_one_cell, only_severe = FALSE,
     summarise(
       start_time = first(.data[[time_col]]),
       end_time = last(.data[[time_col]]),
-      if(time_col == "year"){
-        duration = n()
-      }
-      else{
-        durations = (n()*5)
-      },
+      duration = n(),
       avg_intensity = mean(intensity),
       max_intensity = max(intensity),
       min_intensity = min(intensity), 
