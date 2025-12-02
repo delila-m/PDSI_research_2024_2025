@@ -1,22 +1,23 @@
 library(dplyr)
 library(tidyverse)
 # load in drought functions
-setwd("C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/Functions/") #glg
-setwd("C:/Users/delil/Desktop/NAU/Research 2024-2025/PDSI_research_2024_2025/Functions/") #laptop
-source("drought_functions.R")
+#setwd("C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/Functions/") #glg
+#setwd("C:/Users/delil/Desktop/NAU/Research 2024-2025/PDSI_research_2024_2025/Functions/") #laptop
+source("Functions/drought_functions.R")
 
 # file path on laptop
-load("C:/Users/delil/Desktop/NAU/Research 2024-2025/PDSI_research_2024_2025/Data/PMDIPredictionSet.Rdata")
-# file path in glg
-load("C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/Data/PMDIPredictionSet.Rdata")
+# load("C:/Users/delil/Desktop/NAU/Research 2024-2025/PDSI_research_2024_2025/Data/PMDIPredictionSet.Rdata")
+# # file path in glg
+# load("C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/Data/PMDIPredictionSet.Rdata")
+load("Data/PMDIPredictionSet.Rdata")
 
-# Previous categorical model for comparison 
-setwd("C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/Data/UpdatedCleaned_0.5")
-load("RFAnalysis0.5_factor_updated.Rdata")
+# Previous categorical model for comparison
+#setwd("C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/Data/UpdatedCleaned_0.5")
+load("Data/UpdatedCleaned/RFAnalysis0.5_factor_updated.Rdata")
 
-# weekly data 
-load("C:/Users/delil/Desktop/NAU/Research 2024-2025/PDSI_research_2024_2025/Data/SampledWeekly_0.5.RData")#laptop
-load("C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/Data/SampledWeekly_0.5.RData")#glg
+# weekly data
+load("Data/SampledWeekly_0.5.RData")
+
 
 pmdi_one_cell <- pmdi_prediction_set %>%
   filter(bin.x == -113.75 & bin.y == 35.25) %>%
@@ -28,7 +29,7 @@ pmdi_one_cell <- pmdi_prediction_set %>%
                                     predictions == "D4" ~ 6,
                                     TRUE ~ -1 ))
 
-# claude generated loop to calculate drought duration 
+# claude generated loop to calculate drought duration
 # Define drought intensity mapping
 drought_map <- c('None' = 1, 'D0' = 2, 'D1' = 3, 'D2' = 4, 'D3' = 5, 'D4' = 6)
 
@@ -60,7 +61,7 @@ drought_events <- pmdi_one_cell %>%
     duration = n(),
     avg_intensity = mean(intensity),
     max_intensity = max(intensity),
-    min_intensity = min(intensity), 
+    min_intensity = min(intensity),
     avg_PDSI = mean(PDSI_Avg),
     drought_sequence = paste(predictions, collapse = ", "),
     .groups = 'drop'
@@ -85,9 +86,9 @@ for (level in intensity_levels) {
   count <- sum(drought_events$max_intensity_label == level, na.rm = TRUE)
   if (count > 0) {
     ri <- 2018 / count
-    return_intervals <- rbind(return_intervals, 
-                              data.frame(intensity = level, 
-                                         count = count, 
+    return_intervals <- rbind(return_intervals,
+                              data.frame(intensity = level,
+                                         count = count,
                                          return_interval = ri))
   }
 }
@@ -106,7 +107,7 @@ plot_data <- data.frame()
 for (dur in duration_values) {
   count <- sum(severe_droughts$duration >= dur)
   ri <- 2018 / count
-  plot_data <- rbind(plot_data, 
+  plot_data <- rbind(plot_data,
                      data.frame(duration = dur,
                                 count = count,
                                 return_interval = ri))
@@ -117,7 +118,7 @@ plota <- ggplot(plot_data, aes(x = duration)) +
   geom_point(aes(y = count, color = "Number of Events"), size = 3) +
   geom_line(aes(y = return_interval, color = "Return Interval"), size = 1.2) +
   geom_point(aes(y = return_interval, color = "Return Interval"), size = 3) +
-  scale_color_manual(values = c("Number of Events" = "blue", 
+  scale_color_manual(values = c("Number of Events" = "blue",
                                 "Return Interval" = "red")) +
   labs(
     title = "Drought Duration vs Return Interval",
@@ -140,8 +141,8 @@ plota <- ggplot(plot_data, aes(x = duration)) +
 
 plota
 
-# test functionality of above operations 
-  # test all separated out 
+# test functionality of above operations
+  # test all separated out
 cropped_test <- crop.cell(pmdi_prediction_set, xbin = -124.25, ybin = 40.25, pred_col = "predictions")
 drought_events_test <- identify.drought(cropped_test, intensity_treshold = 4)
 
@@ -154,9 +155,9 @@ plot_data <- plot.data(drought_events_test2)
 slope_test <- recurrence.slope(plot_data)
 
 
-  # test inside the evaluate.recurrence function 
-      # cell (-91.25, 33.25) only has dourght events with the duration of 1 year 
-full_test <- evaluate.recurrence(pmdi_prediction_set, xbin = -124.25, ybin = 40.25, 
+  # test inside the evaluate.recurrence function
+      # cell (-91.25, 33.25) only has dourght events with the duration of 1 year
+full_test <- evaluate.recurrence(pmdi_prediction_set, xbin = -124.25, ybin = 40.25,
                                  intensity_threshold = 4,
                                  pred_col = "predictions", time_col = "year")
 
@@ -167,17 +168,17 @@ full_drought_intervals_test <- full_test[[3]]
 plot_data <- plot.data(full_drought_events_test2)
 slope_test <- recurrence.slope(plot_data)
 
-# test the plotting 
+# test the plotting
 test_plot <- plot.duration.v.return(plot_data)
 test_plot
 
 
-# try to put it all together in a short loop 
-pmdi_test <- pmdi_prediction_set %>% 
-  distinct(bin.x, bin.y) %>% 
+# try to put it all together in a short loop
+pmdi_test <- pmdi_prediction_set %>%
+  distinct(bin.x, bin.y) %>%
   slice(100:110)
 
-pmdi_test_10 <- pmdi_prediction_set %>% 
+pmdi_test_10 <- pmdi_prediction_set %>%
   semi_join(pmdi_test, by = c("bin.x", "bin.y"))
 
 us_slopes <- data.frame()
@@ -187,69 +188,69 @@ for(index in pmdi_test){
     print(paste(pmdi_test$bin.x, pmdi_test$bin.y))
   }
 
-# add a progress bar 
+# add a progress bar
 pb <- txtProgressBar(min = 0, max = nrow(pmdi_test), style = 3)
 
 # now loop through the whole country
 for(index in 1:nrow(pmdi_test)){
-  
+
   # grab the cell coordinates
   current_xbin = pmdi_test_10$bin.x[index]
   current_ybin = pmdi_test_10$bin.y[index]
-  
-  # evaluate the recurrence intervals for that cell 
-  recurrence_list <- evaluate.recurrence(pmdi_test_10, xbin = current_xbin, 
-                                         ybin = current_ybin, 
+
+  # evaluate the recurrence intervals for that cell
+  recurrence_list <- evaluate.recurrence(pmdi_test_10, xbin = current_xbin,
+                                         ybin = current_ybin,
                                          intensity_threshold = 2,
                                          pred_col = "predictions", time_col = "year")
-  
+
   drought_events <- recurrence_list[[2]]
-  
+
   # Check if valid drought events exist (handles NA, NULL, and empty)
-  has_droughts <- !is.null(drought_events) && 
-    is.data.frame(drought_events) && 
+  has_droughts <- !is.null(drought_events) &&
+    is.data.frame(drought_events) &&
     nrow(drought_events) > 0
-  
-  # make sure there are drought events over our threshold in that cell 
+
+  # make sure there are drought events over our threshold in that cell
   if(has_droughts){
-    
-    # grab the plotting data and find the slope 
+
+    # grab the plotting data and find the slope
     intervals <- plot.data(drought_events)
     print(intervals)
     # make sure that there are drought events with at least two different durations
     if(nrow(intervals) > 0 && max(intervals$duration) >= 2){
       slope <- recurrence.slope(intervals)
       print(slope)
-      # add it all to the existing data frame 
-      us_slopes <- bind_rows(us_slopes, 
-                             data.frame(xbin = current_xbin, 
-                                        ybin = current_ybin, 
+      # add it all to the existing data frame
+      us_slopes <- bind_rows(us_slopes,
+                             data.frame(xbin = current_xbin,
+                                        ybin = current_ybin,
                                         slope = slope$slope,
-                                        intercept = slope$intercept, 
-                                        rsquared = slope$rsquared))
+                                        intercept = slope$intercept,
+                                          rsquared = slope$r_squared))
     }
     # if there are no valid events in that cell return null values
     else{
-      us_slopes <- bind_rows(us_slopes, 
-                             data.frame(xbin = current_xbin, 
-                                        ybin = current_ybin, 
+      us_slopes <- bind_rows(us_slopes,
+                             data.frame(xbin = current_xbin,
+                                        ybin = current_ybin,
                                         slope = NA,
-                                        intercept = NA, 
+                                        intercept = NA,
                                         rsquared = NA))
     }
   }
-  # return null values 
+  # return null values
   else{
-    us_slopes <- bind_rows(us_slopes, 
-                           data.frame(xbin = current_xbin, 
-                                      ybin = current_ybin, 
+    us_slopes <- bind_rows(us_slopes,
+                           data.frame(xbin = current_xbin,
+                                      ybin = current_ybin,
                                       slope = NA,
-                                      intercept = NA, 
+                                      intercept = NA,
                                       rsquared = NA))
     }
-  
+
   # Update progress bar
-  setTxtProgressBar(pb, index) 
+  setTxtProgressBar(pb, index)
 }
 
 # Close progress bar
@@ -262,7 +263,7 @@ library(gridExtra)
 unique_cells <- unique(pmdi_prediction_set[, c("bin.x", "bin.y")])
 
 # Randomly sample 9 cells
-set.seed(123)  
+set.seed(123)
 sampled_indices <- sample(1:nrow(unique_cells), 9)
 sampled_cells <- unique_cells[sampled_indices, ]
 
@@ -276,17 +277,17 @@ for(i in 1:9) {
   # Get cell coordinates
   xbin <- sampled_cells$bin.x[i]
   ybin <- sampled_cells$bin.y[i]
-  
+
   # Run your evaluation function
-  full_test <- evaluate.recurrence(pmdi_prediction_set, 
-                                   xbin = xbin, 
-                                   ybin = ybin, 
-                                   pred_col = "predictions", 
+  full_test <- evaluate.recurrence(pmdi_prediction_set,
+                                   xbin = xbin,
+                                   ybin = ybin,
+                                   pred_col = "predictions",
                                    time_col = "year")
-  
+
   # Generate plot
   test_plot <- plot.duration.v.return(full_test$Drought_events)
-  
+
   # Store plot in list
   plot_list[[i]] <- test_plot
 
@@ -299,9 +300,9 @@ grid.arrange(grobs = plot_list, ncol = 3, nrow = 3)
 
 
 # Use the function - you may want to increase n_cells to ensure you get 9 successful ones
-result <- plot.duration.v.return.combined(train_0.5, n_cells = 15, 
-                                          seed = 123,  
-                                          pred_col = "predicted", 
+result <- plot.duration.v.return.combined(train_0.5, n_cells = 15,
+                                          seed = 123,
+                                          pred_col = "predicted",
                                           time_col = "Date")
 
 # Display the plot
@@ -313,20 +314,20 @@ set.seed(123)
 sampled_indices <- sample(1:nrow(unique_cells), 50)
 sampled_cells <- unique_cells[sampled_indices, ]
 weekly_PDSI_Sampled_0.5 <- test_0.5 %>%
-  semi_join(sampled_cells, by = c("bin.x", "bin.y")) 
+  semi_join(sampled_cells, by = c("bin.x", "bin.y"))
 
 save(weekly_PDSI_Sampled_0.5, file = "C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/Data/SampledWeekly_0.5.RData")
 
-# testing for weekly data 
-cropped_test_weekly <- crop.cell(weekly_PDSI_Sampled_0.5, xbin = -120.5, ybin = 40.5, 
+# testing for weekly data
+cropped_test_weekly <- crop.cell(weekly_PDSI_Sampled_0.5, xbin = -120.5, ybin = 40.5,
                                  pred_col = "predicted")
 drought_events_test_weekly <- identify.drought(cropped_test_weekly)
-list_test_weekly <- summarize.drought.events(drought_events_test_weekly, 
+list_test_weekly <- summarize.drought.events(drought_events_test_weekly,
                                              time_col = "Date", pred_col = "predicted")
 drought_events_test2_weekly <- list_test_weekly[[1]]
 drought_intervals_test_weekly <- list_test_weekly[[2]]
 
-full_test_weekly <- evaluate.recurrence(test_0.5, xbin = -113.75, ybin = 35.25, 
+full_test_weekly <- evaluate.recurrence(test_0.5, xbin = -113.75, ybin = 35.25,
                                  pred_col = "predicted", time_col = "Date")
 
 
@@ -363,12 +364,12 @@ results_obs <- summarize.drought.events(drought_events_test,
 
 
 
-# power law 
-# functionalize approach 
-# weekly data making the same plots with the same gridcell 
+# power law
+# functionalize approach
+# weekly data making the same plots with the same gridcell
 
-# random samples for 10 cells around the country- possibly put lines all on the same plot 
-# fun for everything and map out slopes 
+# random samples for 10 cells around the country- possibly put lines all on the same plot
+# fun for everything and map out slopes
 
 
 
@@ -389,21 +390,21 @@ library(lubridate)
 # =============================================================================
 
 create_sdf_plot <- function(drought_events, study_period) {
-  
+
   # Create grid of duration and intensity values
   duration_seq <- seq(1, max(drought_events$duration), length.out = 20)
   intensity_seq <- seq(1, 5, length.out = 20)
-  
+
   # Calculate return intervals for each combination
   sdf_data <- expand.grid(duration = duration_seq, intensity = intensity_seq)
-  
+
   sdf_data$return_interval <- sapply(1:nrow(sdf_data), function(i) {
-    count <- sum(drought_events$duration >= sdf_data$duration[i] & 
+    count <- sum(drought_events$duration >= sdf_data$duration[i] &
                  drought_events$max_intensity >= sdf_data$intensity[i])
     if (count == 0) return(NA)
     return(study_period / count)
   })
-  
+
   plot <- ggplot(sdf_data, aes(x = duration, y = intensity, z = return_interval)) +
     geom_contour_filled(bins = 10) +
     geom_contour(color = "white", alpha = 0.5) +
@@ -420,7 +421,7 @@ create_sdf_plot <- function(drought_events, study_period) {
     ) +
     theme_minimal() +
     theme(plot.title = element_text(size = 14, face = "bold"))
-  
+
   ggsave("plot5_sdf_contour.png", plot, width = 10, height = 6, dpi = 300)
   return(plot)
 }
@@ -430,7 +431,7 @@ create_sdf_plot <- function(drought_events, study_period) {
 # =============================================================================
 
 create_cumulative_deficit_plot <- function(pmdi_one_cell, drought_events) {
-  
+
   # Calculate cumulative deficit for each drought event
   deficit_data <- pmdi_one_cell %>%
     filter(!is.na(drought_id)) %>%
@@ -442,8 +443,8 @@ create_cumulative_deficit_plot <- function(pmdi_one_cell, drought_events) {
       cumulative_deficit = cumsum(deficit)
     ) %>%
     ungroup()
-  
-  plot <- ggplot(deficit_data, aes(x = year, y = cumulative_deficit, 
+
+  plot <- ggplot(deficit_data, aes(x = year, y = cumulative_deficit,
                                    group = drought_id, color = factor(drought_id))) +
     geom_line(size = 1.2) +
     geom_point(size = 2) +
@@ -459,7 +460,7 @@ create_cumulative_deficit_plot <- function(pmdi_one_cell, drought_events) {
       plot.title = element_text(size = 14, face = "bold"),
       legend.position = "right"
     )
-  
+
   ggsave("plot6_cumulative_deficit.png", plot, width = 10, height = 6, dpi = 300)
   return(plot)
 }
@@ -469,27 +470,27 @@ create_cumulative_deficit_plot <- function(pmdi_one_cell, drought_events) {
 # =============================================================================
 
 create_seasonal_onset_plot <- function(pmdi_one_cell) {
-  
+
   # Identify drought onset years (first year of each drought event)
   onset_data <- pmdi_one_cell %>%
     filter(!is.na(drought_id)) %>%
     group_by(drought_id) %>%
     filter(year == min(year)) %>%
     ungroup()
-  
+
   # If you have actual month data, use it. Otherwise simulate for demonstration
   # Assuming year data only - create distribution across months (random for demo)
   set.seed(123)
   onset_data$month <- sample(1:12, nrow(onset_data), replace = TRUE)
-  
+
   monthly_counts <- onset_data %>%
     group_by(month) %>%
     summarise(count = n()) %>%
     complete(month = 1:12, fill = list(count = 0))
-  
-  monthly_counts$month_name <- factor(month.abb[monthly_counts$month], 
+
+  monthly_counts$month_name <- factor(month.abb[monthly_counts$month],
                                      levels = month.abb)
-  
+
   plot <- ggplot(monthly_counts, aes(x = month_name, y = count)) +
     geom_bar(stat = "identity", fill = "coral", color = "black") +
     labs(
@@ -504,7 +505,7 @@ create_seasonal_onset_plot <- function(pmdi_one_cell) {
       plot.title = element_text(size = 14, face = "bold"),
       axis.text.x = element_text(angle = 45, hjust = 1)
     )
-  
+
   ggsave("plot7_seasonal_onset.png", plot, width = 10, height = 6, dpi = 300)
   return(plot)
 }
@@ -514,21 +515,21 @@ create_seasonal_onset_plot <- function(pmdi_one_cell) {
 # =============================================================================
 
 create_return_period_curve <- function(drought_events, study_period) {
-  
+
   # Calculate return period for each intensity level
   intensity_levels <- 1:5
   return_data <- data.frame(
     intensity = intensity_levels,
     intensity_label = c("D0", "D1", "D2", "D3", "D4")
   )
-  
+
   return_data$count <- sapply(intensity_levels, function(level) {
     sum(drought_events$max_intensity >= level)
   })
-  
+
   return_data$return_period <- study_period / return_data$count
   return_data$return_period[return_data$count == 0] <- NA
-  
+
   plot <- ggplot(return_data, aes(x = intensity, y = return_period)) +
     geom_line(color = "darkred", size = 1.5) +
     geom_point(size = 4, color = "darkred") +
@@ -548,7 +549,7 @@ create_return_period_curve <- function(drought_events, study_period) {
       plot.title = element_text(size = 14, face = "bold"),
       panel.grid.minor = element_blank()
     )
-  
+
   ggsave("plot8_return_period_curve.png", plot, width = 8, height = 6, dpi = 300)
   return(plot)
 }
@@ -558,18 +559,18 @@ create_return_period_curve <- function(drought_events, study_period) {
 # =============================================================================
 
 create_exceedance_probability_plot <- function(drought_events) {
-  
+
   # Calculate exceedance probability for duration
   duration_sorted <- sort(drought_events$duration, decreasing = TRUE)
   n <- length(duration_sorted)
   exceedance_prob <- (1:n) / (n + 1) * 100
-  
+
   duration_ep <- data.frame(
     value = duration_sorted,
     exceedance_prob = exceedance_prob,
     type = "Duration (years)"
   )
-  
+
   # Calculate exceedance probability for intensity
   intensity_sorted <- sort(drought_events$max_intensity, decreasing = TRUE)
   intensity_ep <- data.frame(
@@ -577,9 +578,9 @@ create_exceedance_probability_plot <- function(drought_events) {
     exceedance_prob = (1:length(intensity_sorted)) / (length(intensity_sorted) + 1) * 100,
     type = "Max Intensity"
   )
-  
+
   ep_data <- rbind(duration_ep, intensity_ep)
-  
+
   plot <- ggplot(ep_data, aes(x = value, y = exceedance_prob, color = type)) +
     geom_line(size = 1.2) +
     geom_point(size = 2) +
@@ -597,7 +598,7 @@ create_exceedance_probability_plot <- function(drought_events) {
       legend.position = "none",
       strip.text = element_text(size = 12, face = "bold")
     )
-  
+
   ggsave("plot1_exceedance_probability.png", plot, width = 10, height = 5, dpi = 300)
   return(plot)
 }
@@ -607,10 +608,10 @@ create_exceedance_probability_plot <- function(drought_events) {
 # =============================================================================
 
 create_frequency_by_decade_plot <- function(drought_events) {
-  
+
   # Assign each drought to a decade based on start year
   drought_events$decade <- floor(drought_events$start_year / 10) * 10
-  
+
   decade_counts <- drought_events %>%
     group_by(decade) %>%
     summarise(
@@ -620,14 +621,14 @@ create_frequency_by_decade_plot <- function(drought_events) {
     pivot_longer(cols = c(total_droughts, severe_droughts),
                  names_to = "category",
                  values_to = "count")
-  
+
   decade_counts$category <- factor(decade_counts$category,
                                   levels = c("total_droughts", "severe_droughts"),
                                   labels = c("All Droughts (≥D0)", "Severe Droughts (≥D2)"))
-  
+
   plot <- ggplot(decade_counts, aes(x = decade, y = count, fill = category)) +
     geom_bar(stat = "identity", position = "dodge", color = "black") +
-    scale_fill_manual(values = c("All Droughts (≥D0)" = "lightblue", 
+    scale_fill_manual(values = c("All Droughts (≥D0)" = "lightblue",
                                  "Severe Droughts (≥D2)" = "darkred")) +
     labs(
       title = "Drought Frequency by Decade",
@@ -641,7 +642,7 @@ create_frequency_by_decade_plot <- function(drought_events) {
       plot.title = element_text(size = 14, face = "bold"),
       legend.position = "bottom"
     )
-  
+
   ggsave("plot3_frequency_by_decade.png", plot, width = 10, height = 6, dpi = 300)
   return(plot)
 }
@@ -651,7 +652,7 @@ create_frequency_by_decade_plot <- function(drought_events) {
 # =============================================================================
 
 create_timeseries_highlighted_plot <- function(pmdi_one_cell) {
-  
+
   # Create color mapping for drought intensity
   pmdi_one_cell$color_group <- case_when(
     is.na(pmdi_one_cell$drought_id) ~ "No Drought",
@@ -662,17 +663,17 @@ create_timeseries_highlighted_plot <- function(pmdi_one_cell) {
     pmdi_one_cell$predictions == "D4" ~ "D4",
     TRUE ~ "No Drought"
   )
-  
-  pmdi_one_cell$color_group <- factor(pmdi_one_cell$color_group, 
+
+  pmdi_one_cell$color_group <- factor(pmdi_one_cell$color_group,
                           levels = c("No Drought", "D0", "D1", "D2", "D3", "D4"))
-  
+
   plot <- ggplot(pmdi_one_cell, aes(x = year, y = PDSI_Avg)) +
     geom_line(color = "gray50", size = 0.5) +
     geom_point(aes(color = color_group), size = 2.5) +
     geom_hline(yintercept = 0, linetype = "dashed", color = "black") +
     scale_color_manual(
-      values = c("No Drought" = "gray70", "D0" = "yellow", 
-                "D1" = "orange", "D2" = "darkorange", 
+      values = c("No Drought" = "gray70", "D0" = "yellow",
+                "D1" = "orange", "D2" = "darkorange",
                 "D3" = "red", "D4" = "darkred"),
       name = "Drought Category"
     ) +
@@ -687,7 +688,7 @@ create_timeseries_highlighted_plot <- function(pmdi_one_cell) {
       plot.title = element_text(size = 14, face = "bold"),
       legend.position = "bottom"
     )
-  
+
   ggsave("plot2_timeseries_highlighted.png", plot, width = 12, height = 6, dpi = 300)
   return(plot)
 }
@@ -735,4 +736,4 @@ test.plot <- plot.pmdi(pmdi_1000, "predictions", year = 1000)
 test2 <- plot.pdsi(pmdi_1000, "PDSI_Avg", year = 1000)
 
 test.biplot <- test.plot + test2
-# plot predicted vs actual 
+# plot predicted vs actual
