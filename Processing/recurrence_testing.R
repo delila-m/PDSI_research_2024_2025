@@ -14,6 +14,10 @@ load("C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/Data/PMDIPredic
 setwd("C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/Data/UpdatedCleaned_0.5")
 load("RFAnalysis0.5_factor_updated.Rdata")
 
+# weekly data 
+load("C:/Users/delil/Desktop/NAU/Research 2024-2025/PDSI_research_2024_2025/Data/SampledWeekly_0.5.RData")
+
+
 pmdi_one_cell <- pmdi_prediction_set %>%
   filter(bin.x == -113.75 & bin.y == 35.25) %>%
   mutate(intensity = case_when(predictions == "None" ~ 1,
@@ -139,18 +143,57 @@ plota
 # test functionality of above operations 
 cropped_test <- crop.cell(pmdi_prediction_set, xbin = -113.75, ybin = 35.25, pred_col = "predictions")
 drought_events_test <- identify.drought(cropped_test)
-list_test <- summarize.drought.events(drought_events_test, time_col = "year")
+list_test <- summarize.drought.events(drought_events_test, time_col = "year", pred_col = "predictions")
+                                     # duration_unit = "years")
 drought_events_test2 <- list_test[[1]]
 drought_intervals_test <- list_test[[2]]
 
+plot_data <- plot.data(full_drought_events_test2)
+slope_test <- recurrence.slope(plot_data)
+
 full_test <- evaluate.recurrence(pmdi_prediction_set, xbin = -113.75, ybin = 35.25, 
+                                 intensity_threshold = 4,
                                  pred_col = "predictions", time_col = "year")
 
 
 full_drought_events_test2 <- full_test[[2]]
 full_drought_intervals_test <- full_test[[3]]
 
-test_plot <- plot.duration.v.return(full_test$Drought_events)
+test_plot <- plot.duration.v.return(plot_data)
+
+
+pmdi_test <- pmdi_prediction_set %>% 
+  distinct(bin.x, bin.y) %>% 
+  slice(1:10)
+pmdi_test_10 <- pmdi_prediction_set %>% 
+  semi_join(pmdi_test, by = c("bin.x", "bin.y"))
+
+us_slopes <- data.frame()
+
+# now loop through the whole country
+for(xbin in pmdi_test_10$bin.x){
+  for(ybin in pmdi_test_10$bin.y){
+    # evaluate the recurrence intervals for that cell 
+    recurrence_list <- evaluate.recurrence(pmdi_prediction_set, xbin = xbin, ybin = ybin, 
+                                           intensity_threshold = 4,
+                                           pred_col = "predictions", time_col = "year")
+    
+    drought_events <- recurrence_list[2]
+    # grab the plotting data and find the slope 
+    intervals <- plot.data(drought_events)
+    slope <- recurrence.slope(intervals)
+    
+    # add it all to the existing data frame 
+    us_slopes <- bind_rows(us_slopes, 
+                           data.frame(xbin = xbin, 
+                                      ybin = ybin, 
+                                      slope = slope$slope,
+                                      itnercept = slope$intercept, 
+                                      rsquared = slope$rsquared))
+    
+  }
+}
+
 
 # Load required library for plot arrangement
 library(gridExtra)
@@ -215,20 +258,49 @@ weekly_PDSI_Sampled_0.5 <- test_0.5 %>%
 save(weekly_PDSI_Sampled_0.5, file = "C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/Data/SampledWeekly_0.5.RData")
 
 # testing for weekly data 
-cropped_test_weekly <- crop.cell(sampled_cells, xbin = -113.5, ybin = 35.5, pred_col = "predicted")
-drought_events_test <- identify.drought(cropped_test_weekly)
-list_test <- summarize.drought.events(drought_events_test, time_col = "Date", pred_col = "predicted")
-drought_events_test2 <- list_test[[1]]
-drought_intervals_test <- list_test[[2]]
+cropped_test_weekly <- crop.cell(weekly_PDSI_Sampled_0.5, xbin = -120.5, ybin = 40.5, 
+                                 pred_col = "predicted")
+drought_events_test_weekly <- identify.drought(cropped_test_weekly)
+list_test_weekly <- summarize.drought.events(drought_events_test_weekly, 
+                                             time_col = "Date", pred_col = "predicted")
+drought_events_test2_weekly <- list_test_weekly[[1]]
+drought_intervals_test_weekly <- list_test_weekly[[2]]
 
-full_test <- evaluate.recurrence(test_0.5, xbin = -113.75, ybin = 35.25, 
+full_test_weekly <- evaluate.recurrence(test_0.5, xbin = -113.75, ybin = 35.25, 
                                  pred_col = "predicted", time_col = "Date")
 
 
-full_drought_events_test2 <- full_test[[2]]
-full_drought_intervals_test <- full_test[[3]]
+full_drought_events_test2 <- full_test_weekly[[1]]
+full_drought_intervals_test <- full_test_weekly[[2]]
 
-test_plot <- plot.duration.v.return(list_test$Droughts)
+plot_data_weekly <- plot.data(drought_events_test2_weekly)
+test_plot <- plot.duration.v.return(plot_data_weekly)
+
+
+
+#Example usage:
+#For counting in weeks:
+results_weeks <- summarize.drought.events(drought_events_test,
+                                          time_col = "Date",
+                                          pred_col = "predicted",
+                                          duration_unit = "weeks")
+
+#For counting in days:
+results_days <- summarize.drought.events(drought_events_test,
+                                         time_col = "Date",
+                                         pred_col = "predicted",
+                                         duration_unit = "days")
+
+#For original behavior (counting observations):
+results_obs <- summarize.drought.events(drought_events_test,
+                                        time_col = "Date",
+                                        pred_col = "predicted",
+                                        duration_unit = "observations")
+
+
+
+
+
 
 
 # power law 
