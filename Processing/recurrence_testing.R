@@ -13,7 +13,7 @@ load("Data/PMDIPredictionSet.Rdata")
 
 # Previous categorical model for comparison
 #setwd("C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/Data/UpdatedCleaned_0.5")
-load("Data/UpdatedCleaned/RFAnalysis0.5_factor_updated.Rdata")
+load("Data/UpdatedCleaned_0.5/RFAnalysis0.5_factor_updated.Rdata")
 
 # weekly data
 load("Data/SampledWeekly_0.5.RData")
@@ -144,7 +144,7 @@ plota
 # test functionality of above operations
   # test all separated out
 cropped_test <- crop.cell(pmdi_prediction_set, xbin = -124.25, ybin = 40.25, pred_col = "predictions")
-drought_events_test <- identify.drought(cropped_test, intensity_treshold = 4)
+drought_events_test <- identify.drought(cropped_test, intensity_threshold = 4)
 
 list_test <- summarize.drought.events(drought_events_test, time_col = "year", pred_col = "predictions")
                                      # duration_unit = "years")
@@ -157,7 +157,7 @@ slope_test <- recurrence.slope(plot_data)
 
   # test inside the evaluate.recurrence function
       # cell (-91.25, 33.25) only has dourght events with the duration of 1 year
-full_test <- evaluate.recurrence(pmdi_prediction_set, xbin = -87.75, ybin = 34.75,
+full_test <- evaluate.annual.recurrence(pmdi_prediction_set, xbin = -122.75, ybin = 38.25,
                                  intensity_threshold = 4,
                                  pred_col = "predictions", time_col = "year")
 
@@ -173,28 +173,14 @@ test_plot <- plot.duration.v.return(plot_data)
 test_plot
 
 
-# try to put it all together in a short loop
-pmdi_test <- pmdi_prediction_set %>%
-  distinct(bin.x, bin.y) %>%
-  slice(100:110)
-
-pmdi_test_10 <- pmdi_prediction_set %>%
-  semi_join(pmdi_test, by = c("bin.x", "bin.y"))
-
-
 #create a data.frame of unique X/Y pairs to loop through
-latlongpairs <- pmdi_prediction_set %>%
+latlongpairs <- test_0.5 %>%
   distinct(bin.x, bin.y)
 
-
-################# issues in this loop here
-for(index in latlongpairs){
-    print(paste(latlongpairs$bin.x, latlongpairs$bin.y))
-  }
-
-# add a progress bar
+# initialize data frame
 us_slopes <- data.frame()
 
+# add a progress bar
 pb <- txtProgressBar(min = 0, max = nrow(latlongpairs), style = 3)
 
 
@@ -206,10 +192,10 @@ for(index in 1:nrow(latlongpairs)){
   current_ybin = latlongpairs$bin.y[index]
 
   # evaluate the recurrence intervals for that cell
-  recurrence_list <- evaluate.recurrence(pmdi_prediction_set, xbin = current_xbin,
+  recurrence_list <- evaluate.weekly.recurrence(test_0.5, xbin = current_xbin,
                                          ybin = current_ybin,
-                                         intensity_threshold = 3,
-                                         pred_col = "predictions", time_col = "year")
+                                         intensity_threshold = 2,
+                                         pred_col = "predicted", time_col = "Date")
 
   drought_events <- recurrence_list[[2]]
 
@@ -266,7 +252,7 @@ close(pb)
 # Load required library for plot arrangement
 library(gridExtra)
 
-save(us_slopes, file = "Data/yearly_slopes_D0.RData")
+save(us_slopes, file = "Data/weekly_slopes_D0.RData")
 load("Data/yearly_slopes_D1.RData")
 
 us_outline <- map_data("usa")
@@ -275,67 +261,19 @@ plot <- ggplot(us_slopes, aes(x = xbin, y = ybin, fill = slope)) +
   geom_tile() +
   geom_path(data = us_outline, aes(x = long, y = lat, group = group), 
             color = "black", linewidth = 0.7, inherit.aes = FALSE) +
-  scale_fill_gradient2(low = "darkgreen", 
-                       mid = "lightgreen",
-                         high = "darkred")+
+  scale_fill_gradient2(low = "#9ecae1",
+                       mid = "#a6bddb",
+                       high = "purple", 
+                       midpoint = 0.0250)+
   theme_minimal()+
-  labs(title = "Slope of drought recurrence for events > D0", 
+  labs(title = "Slope of drought recurrence for weekly events > D0", 
        x = "", 
        y = "")
 
 
 plot
 
-ggsave("Plots/annual_recurrence_D1_plots.png", plot, width = 10, height = 6)
-
-# Get unique cell combinations
-unique_cells <- unique(pmdi_prediction_set[, c("bin.x", "bin.y")])
-
-# Randomly sample 9 cells
-set.seed(123)
-sampled_indices <- sample(1:nrow(unique_cells), 9)
-sampled_cells <- unique_cells[sampled_indices, ]
-
-# Initialize list to store plots
-plot_list <- list()
-all_drought_data <- list()
-
-
-# Loop through each sampled cell
-for(i in 1:9) {
-  # Get cell coordinates
-  xbin <- sampled_cells$bin.x[i]
-  ybin <- sampled_cells$bin.y[i]
-
-  # Run your evaluation function
-  full_test <- evaluate.recurrence(pmdi_prediction_set,
-                                   xbin = xbin,
-                                   ybin = ybin,
-                                   pred_col = "predictions",
-                                   time_col = "year")
-
-  # Generate plot
-  test_plot <- plot.duration.v.return(full_test$Drought_events)
-
-  # Store plot in list
-  plot_list[[i]] <- test_plot
-
-  # print progress
-  cat("Processed cell", i, "of 9: (", xbin, ",", ybin, ")\n")
-}
-
-# Arrange all plots in a 3x3 grid
-grid.arrange(grobs = plot_list, ncol = 3, nrow = 3)
-
-
-# Use the function
-result <- plot.duration.v.return.combined(train_0.5, n_cells = 15,
-                                          seed = 123,
-                                          pred_col = "predicted",
-                                          time_col = "Date")
-
-# Display the plot
-print(result$plot)
+ggsave("Plots/weekly_recurrence_D0_plot.png", plot, width = 10, height = 6)
 
 # Slice weekly data for use on laptop
 unique_cells <- unique(test_0.5[, c("bin.x", "bin.y")])
@@ -348,53 +286,32 @@ weekly_PDSI_Sampled_0.5 <- test_0.5 %>%
 save(weekly_PDSI_Sampled_0.5, file = "C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/Data/SampledWeekly_0.5.RData")
 
 # testing for weekly data
-cropped_test_weekly <- crop.cell(weekly_PDSI_Sampled_0.5, xbin = -120.5, ybin = 40.5,
+cropped_test_weekly <- crop.cell(test_0.5, xbin = -120.5, ybin = 40.5,
                                  pred_col = "predicted")
-drought_events_test_weekly <- identify.drought(cropped_test_weekly)
-list_test_weekly <- summarize.drought.events(drought_events_test_weekly,
+drought_events_test_weekly <- identify.weekly.drought(cropped_test_weekly)
+list_test_weekly <- summarize.weekly.drought.events(drought_events_test_weekly,
                                              time_col = "Date", pred_col = "predicted")
 drought_events_test2_weekly <- list_test_weekly[[1]]
 drought_intervals_test_weekly <- list_test_weekly[[2]]
 
-full_test_weekly <- evaluate.recurrence(pmdi_prediction_set, xbin = -113.75, ybin = 35.25,
+full_test_weekly <- evaluate.weekly.recurrence(test_0.5, xbin = -120.5, ybin = 40.5,
                                  pred_col = "predicted", time_col = "Date")
 
 
-full_drought_events_test2 <- full_test_weekly[[1]]
-full_drought_intervals_test <- full_test_weekly[[2]]
+full_drought_events_test2 <- full_test_weekly[[2]]
+full_drought_intervals_test <- full_test_weekly[[3]]
 
-plot_data_weekly <- plot.data(drought_events_test2_weekly)
-test_plot <- plot.duration.v.return(plot_data_weekly)
+plot_data_weekly <- plot.data(full_drought_events_test2)
+weekly_slope <- recurrence.slope(plot_data_weekly)
 
-
-
-#Example usage:
-#For counting in weeks:
-results_weeks <- summarize.drought.events(drought_events_test,
-                                          time_col = "Date",
-                                          pred_col = "predicted",
-                                          duration_unit = "weeks")
-
-#For counting in days:
-results_days <- summarize.drought.events(drought_events_test,
-                                         time_col = "Date",
-                                         pred_col = "predicted",
-                                         duration_unit = "days")
-
-#For original behavior (counting observations):
-results_obs <- summarize.drought.events(drought_events_test,
-                                        time_col = "Date",
-                                        pred_col = "predicted",
-                                        duration_unit = "observations")
-
-
-
+test_plot <- plot.weekly.duration.v.return(plot_data_weekly)
+test_plot
 
 
 
 
 # power law
-# functionalize approach
+# functionalize approachhttp://127.0.0.1:10757/graphics/plot_zoom_png?width=1080&height=692
 # weekly data making the same plots with the same gridcell
 
 # random samples for 10 cells around the country- possibly put lines all on the same plot
