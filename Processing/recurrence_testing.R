@@ -169,12 +169,12 @@ plot_data <- plot.data(full_drought_events_test2)
 slope_test <- recurrence.slope(plot_data)
 
 # test the plotting
-test_plot <- plot.duration.v.return(plot_data)
+test_plot <- plot.annual.duration.v.return(plot_data)
 test_plot
 
 
 #create a data.frame of unique X/Y pairs to loop through
-latlongpairs <- test_0.5 %>%
+latlongpairs <- pmdi_prediction_set %>%
   distinct(bin.x, bin.y)
 
 # initialize data frame
@@ -192,10 +192,10 @@ for(index in 1:nrow(latlongpairs)){
   current_ybin = latlongpairs$bin.y[index]
 
   # evaluate the recurrence intervals for that cell
-  recurrence_list <- evaluate.weekly.recurrence(test_0.5, xbin = current_xbin,
+  recurrence_list <- evaluate.annual.recurrence(pmdi_prediction_set, xbin = current_xbin,
                                          ybin = current_ybin,
-                                         intensity_threshold = 2,
-                                         pred_col = "predicted", time_col = "Date")
+                                         intensity_threshold = 4,
+                                         pred_col = "predictions", time_col = "year")
 
   drought_events <- recurrence_list[[2]]
 
@@ -252,8 +252,8 @@ close(pb)
 # Load required library for plot arrangement
 library(gridExtra)
 
-save(us_slopes, file = "Data/weekly_slopes_D0.RData")
-load("Data/yearly_slopes_D1.RData")
+save(us_slopes, file = "Data/yearly_slopes_D2.RData")
+load("Data/weekly_slopes_D2.RData")
 
 us_outline <- map_data("usa")
 
@@ -311,11 +311,13 @@ test_plot
 
 
 # power law
-# functionalize approachhttp://127.0.0.1:10757/graphics/plot_zoom_png?width=1080&height=692
+# functionalize approach http://127.0.0.1:10757/graphics/plot_zoom_png?width=1080&height=692
 # weekly data making the same plots with the same gridcell
 
 # random samples for 10 cells around the country- possibly put lines all on the same plot
 # fun for everything and map out slopes
+
+# calculate recurrence for one level of duration: ex. recurrence of 2 year long D2 level drought and plot across the whole country 
 
 
 
