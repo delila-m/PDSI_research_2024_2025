@@ -157,7 +157,7 @@ slope_test <- recurrence.slope(plot_data)
 
   # test inside the evaluate.recurrence function
       # cell (-91.25, 33.25) only has dourght events with the duration of 1 year
-full_test <- evaluate.recurrence(pmdi_prediction_set, xbin = -124.25, ybin = 40.25,
+full_test <- evaluate.recurrence(pmdi_prediction_set, xbin = -87.75, ybin = 34.75,
                                  intensity_threshold = 4,
                                  pred_col = "predictions", time_col = "year")
 
@@ -208,7 +208,7 @@ for(index in 1:nrow(latlongpairs)){
   # evaluate the recurrence intervals for that cell
   recurrence_list <- evaluate.recurrence(pmdi_prediction_set, xbin = current_xbin,
                                          ybin = current_ybin,
-                                         intensity_threshold = 2,
+                                         intensity_threshold = 3,
                                          pred_col = "predictions", time_col = "year")
 
   drought_events <- recurrence_list[[2]]
@@ -266,6 +266,28 @@ close(pb)
 # Load required library for plot arrangement
 library(gridExtra)
 
+save(us_slopes, file = "Data/yearly_slopes_D0.RData")
+load("Data/yearly_slopes_D1.RData")
+
+us_outline <- map_data("usa")
+
+plot <- ggplot(us_slopes, aes(x = xbin, y = ybin, fill = slope)) +
+  geom_tile() +
+  geom_path(data = us_outline, aes(x = long, y = lat, group = group), 
+            color = "black", linewidth = 0.7, inherit.aes = FALSE) +
+  scale_fill_gradient2(low = "darkgreen", 
+                       mid = "lightgreen",
+                         high = "darkred")+
+  theme_minimal()+
+  labs(title = "Slope of drought recurrence for events > D0", 
+       x = "", 
+       y = "")
+
+
+plot
+
+ggsave("Plots/annual_recurrence_D1_plots.png", plot, width = 10, height = 6)
+
 # Get unique cell combinations
 unique_cells <- unique(pmdi_prediction_set[, c("bin.x", "bin.y")])
 
@@ -306,7 +328,7 @@ for(i in 1:9) {
 grid.arrange(grobs = plot_list, ncol = 3, nrow = 3)
 
 
-# Use the function - you may want to increase n_cells to ensure you get 9 successful ones
+# Use the function
 result <- plot.duration.v.return.combined(train_0.5, n_cells = 15,
                                           seed = 123,
                                           pred_col = "predicted",
@@ -334,7 +356,7 @@ list_test_weekly <- summarize.drought.events(drought_events_test_weekly,
 drought_events_test2_weekly <- list_test_weekly[[1]]
 drought_intervals_test_weekly <- list_test_weekly[[2]]
 
-full_test_weekly <- evaluate.recurrence(test_0.5, xbin = -113.75, ybin = 35.25,
+full_test_weekly <- evaluate.recurrence(pmdi_prediction_set, xbin = -113.75, ybin = 35.25,
                                  pred_col = "predicted", time_col = "Date")
 
 
