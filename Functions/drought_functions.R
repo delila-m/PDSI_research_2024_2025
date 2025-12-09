@@ -594,7 +594,7 @@ summarize.weekly.drought.events <- function(pmdi_one_cell, only_severe = FALSE,
     summarise(
       start_time = first(.data[[time_col]]),
       end_time = last(.data[[time_col]]),
-      duration = as.double(difftime(end_time, start_time, units = "days")),
+      duration = (as.double(difftime(end_time, start_time, units = "days")))/365,
       avg_intensity = mean(intensity),
       max_intensity = max(intensity),
       min_intensity = min(intensity), 

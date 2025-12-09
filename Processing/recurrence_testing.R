@@ -174,7 +174,7 @@ test_plot
 
 
 #create a data.frame of unique X/Y pairs to loop through
-latlongpairs <- pmdi_prediction_set %>%
+latlongpairs <- test_0.5 %>%
   distinct(bin.x, bin.y)
 
 # initialize data frame
@@ -192,10 +192,10 @@ for(index in 1:nrow(latlongpairs)){
   current_ybin = latlongpairs$bin.y[index]
 
   # evaluate the recurrence intervals for that cell
-  recurrence_list <- evaluate.annual.recurrence(pmdi_prediction_set, xbin = current_xbin,
+  recurrence_list <- evaluate.annual.recurrence(test_0.5, xbin = current_xbin,
                                          ybin = current_ybin,
-                                         intensity_threshold = 4,
-                                         pred_col = "predictions", time_col = "year")
+                                         intensity_threshold = 2,
+                                         pred_col = "predicted", time_col = "Date")
 
   drought_events <- recurrence_list[[2]]
 
@@ -252,7 +252,7 @@ close(pb)
 # Load required library for plot arrangement
 library(gridExtra)
 
-save(us_slopes, file = "Data/yearly_slopes_D2.RData")
+save(us_slopes, file = "Data/weekly_slopes_D0.RData")
 load("Data/weekly_slopes_D2.RData")
 
 us_outline <- map_data("usa")
@@ -261,10 +261,8 @@ plot <- ggplot(us_slopes, aes(x = xbin, y = ybin, fill = slope)) +
   geom_tile() +
   geom_path(data = us_outline, aes(x = long, y = lat, group = group), 
             color = "black", linewidth = 0.7, inherit.aes = FALSE) +
-  scale_fill_gradient2(low = "#9ecae1",
-                       mid = "#a6bddb",
-                       high = "purple", 
-                       midpoint = 0.0250)+
+  scale_fill_gradient2(low = "darkgreen",
+                       high = "darkblue")+
   theme_minimal()+
   labs(title = "Slope of drought recurrence for weekly events > D0", 
        x = "", 
@@ -273,7 +271,6 @@ plot <- ggplot(us_slopes, aes(x = xbin, y = ybin, fill = slope)) +
 
 plot
 
-ggsave("Plots/weekly_recurrence_D0_plot.png", plot, width = 10, height = 6)
 
 # Slice weekly data for use on laptop
 unique_cells <- unique(test_0.5[, c("bin.x", "bin.y")])
@@ -291,7 +288,7 @@ cropped_test_weekly <- crop.cell(test_0.5, xbin = -120.5, ybin = 40.5,
 drought_events_test_weekly <- identify.weekly.drought(cropped_test_weekly)
 list_test_weekly <- summarize.weekly.drought.events(drought_events_test_weekly,
                                              time_col = "Date", pred_col = "predicted")
-drought_events_test2_weekly <- list_test_weekly[[1]]
+drought_events_test2_weekly_fixed <- list_test_weekly[[1]]
 drought_intervals_test_weekly <- list_test_weekly[[2]]
 
 full_test_weekly <- evaluate.weekly.recurrence(test_0.5, xbin = -120.5, ybin = 40.5,
@@ -308,6 +305,33 @@ test_plot <- plot.weekly.duration.v.return(plot_data_weekly)
 test_plot
 
 
+load("Data/weekly_slopes_D1.RData")
+
+# find the recurrence interval for an X year drought of severity level Z
+us_slopes <- us_slopes %>% mutate(RI_2 = slope*2 + intercept)
+
+
+# plot return intervals
+us_outline <- map_data("usa")
+
+plot <- ggplot(us_slopes, aes(x = xbin, y = ybin, fill = RI_2)) +
+  geom_tile() +
+  geom_path(data = us_outline, aes(x = long, y = lat, group = group), 
+            color = "black", linewidth = 0.7, inherit.aes = FALSE) +
+  
+  # fix color limits 
+  scale_fill_gradient2(low = "lightgreen",
+                       high = "red", 
+                       )+
+  theme_minimal()+
+  labs(title = "Return Interval of 2 Year Drought events > D1", 
+       x = "", 
+       y = "")
+
+
+plot
+
+ggsave("Plots/weekly_2yr_recurrence_D1_plot.png", plot, width = 10, height = 6)
 
 
 # power law
