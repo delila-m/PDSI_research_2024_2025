@@ -157,7 +157,7 @@ slope_test <- recurrence.slope(plot_data)
 
   # test inside the evaluate.recurrence function
       # cell (-91.25, 33.25) only has dourght events with the duration of 1 year
-full_test <- evaluate.annual.recurrence(pmdi_prediction_set, xbin = -122.75, ybin = 38.25,
+full_test <- evaluate.annual.recurrence(pmdi_prediction_set, xbin = -113.75, ybin = 35.25,
                                  intensity_threshold = 4,
                                  pred_col = "predictions", time_col = "year")
 
@@ -253,7 +253,7 @@ close(pb)
 library(gridExtra)
 
 save(us_slopes, file = "Data/Instrumental_slopes_D0.RData")
-load("Data/weekly_slopes_D2.RData")
+load("Data/weekly_slopes_D1.RData")
 
 us_outline <- map_data("usa")
 
@@ -305,29 +305,36 @@ test_plot <- plot.weekly.duration.v.return(plot_data_weekly)
 test_plot
 
 
-load("Data/yearly_slopes_D1.RData")
+load("Data/instrumental_slopes_D1.RData")
 
 # find the recurrence interval for an X year drought of severity level Z
 us_slopes <- us_slopes %>% mutate(RI_2 = slope*2 + intercept)
 
+us_slopes$RI_yrs <- 10^us_slopes$RI_2
+
+us_inst <- us_slopes
 
 # plot return intervals
 us_outline <- map_data("usa")
 
-plot <- ggplot(us_slopes, aes(x = xbin, y = ybin, fill = RI_2)) +
+plot <- ggplot(us_paleo, aes(x = xbin, y = ybin, fill = RI_yrs)) +
   geom_tile() +
   geom_path(data = us_outline, aes(x = long, y = lat, group = group), 
             color = "black", linewidth = 0.7, inherit.aes = FALSE) +
   
   # fix color limits 
-  scale_fill_gradient2(low = "darkred",
-                       mid = "#F55727", 
-                       high = "#EDBF72",
-                       midpoint = 2,
-                       limits = c(0.9, 3.3))+
+  # scale_fill_gradient2(transform = "log10",
+  #                      # low = "darkred",
+  #                      # mid = "#F55727", 
+  #                      # high = "#EDBF72",
+  #                      fill = "viridis",
+  #                      midpoint = 200,
+  #                      limits = c(1, 2200))+
+  scale_fill_viridis_c(transform = "log10",
+                       limits = c(7, 2200))+
   theme_minimal()+
   labs(title = "Return Interval of 2 Year Drought events > D1",
-       subtitle = "Paleo PDSI Data",
+       subtitle = "Paleo USDM Data",
        x = "", 
        y = "", 
       fill = "Return Interval \n (Years)")+
@@ -343,8 +350,20 @@ plot <- ggplot(us_slopes, aes(x = xbin, y = ybin, fill = RI_2)) +
 
 plot
 
-ggsave("Plots/paleo_2yr_recurrence_D1_plot.png", plot, width = 10, height = 6)
+ggsave("Plots/instrumental_2yr_recurrence_D1_plot.png", plot, width = 10, height = 6)
 
+
+
+# histogram plotting 
+histo <- ggplot(us_inst, aes(x=RI_yrs))+
+  geom_histogram(color = "#244380", fill = "#2E55A3")+
+  labs(title = "Instrumental Return Intervals of 2 Year Drought", 
+       x = "Return Interval (Years)",
+       y = "Count")+
+  theme_minimal()+
+  scale_x_log10()
+  
+histo
 
 # power law
 # functionalize approach http://127.0.0.1:10757/graphics/plot_zoom_png?width=1080&height=692
@@ -359,7 +378,7 @@ ggsave("Plots/paleo_2yr_recurrence_D1_plot.png", plot, width = 10, height = 6)
 
 
 
-ggsave("")
+ggsave("Plots/instrumental_2yr_recurrence_D1_histogram.png", width = 5, height = 2)
 
 library(dplyr)
 library(ggplot2)

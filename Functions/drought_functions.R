@@ -209,7 +209,7 @@ plot.annual.duration.v.return <- function(plot_data){
       color = "Metric"
     ) +
     #scale_x_log10()+
-    scale_y_log10()+
+    #scale_y_log10()+
     theme_minimal() +
     theme(
       panel.grid.major = element_line(color = "gray80"),
