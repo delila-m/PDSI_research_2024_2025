@@ -350,6 +350,7 @@ preds.2024 <- test.yearsplit.0.5.factor %>% filter(year == 2024)
 plotdata <- pred.v.actual.plot.factor(preds.2024, "USDM_Factor", "predictions", 
                           save = TRUE, "AnnualModel2024", year = 2024)
 
+
 importanceplot <- plot.pdsi.importance(rf_recreation, train.yearsplit.0.5.factor, 
                                   save = TRUE, "PDSIImportanceAnnualModel")
 

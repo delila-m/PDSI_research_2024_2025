@@ -775,7 +775,6 @@ library(tidyverse)
 
 pred.v.actual.plot.factor <- function(testing.set, actual.col.name, predicted.col.name, 
                                       save = FALSE, name.string, year){
-  
   # Reshape data to long format for faceting
   plot_data <- testing.set %>%
     mutate(
@@ -785,7 +784,7 @@ pred.v.actual.plot.factor <- function(testing.set, actual.col.name, predicted.co
     pivot_longer(cols = c(Predicted, Actual), 
                  names_to = "Type", 
                  values_to = "USDM_Category") %>%
-    mutate(Type = factor(Type, levels = c("Predicted", "Actual")))
+    mutate(Type = factor(Type, levels = c("Predicted", "Actual"))) 
   
   # Get US outline
   us_outline <- map_data("usa")
@@ -801,7 +800,8 @@ pred.v.actual.plot.factor <- function(testing.set, actual.col.name, predicted.co
                                  "D1" = "#E67D2E", 
                                  "D2" = "#E5541B", 
                                  "D3" = "#C9281C", 
-                                 "D4" = "#8E1C14")) +
+                                 "D4" = "#8E1C14"),
+                      breaks = c("None", "D0", "D1", "D2", "D3", "D4")) +
     facet_wrap(~Type, ncol = 2) +
     theme_minimal() +
     labs(title = paste0("USDM Comparison Across Continental US for ", year)) +
