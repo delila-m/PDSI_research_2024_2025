@@ -194,7 +194,7 @@ for(index in 1:nrow(latlongpairs)){
   # evaluate the recurrence intervals for that cell
   recurrence_list <- evaluate.annual.recurrence(train_0.5, xbin = current_xbin,
                                          ybin = current_ybin,
-                                         intensity_threshold = 4,
+                                         intensity_threshold = 2,
                                          pred_col = "USDM_factor", time_col = "Date")
 
   drought_events <- recurrence_list[[2]]
@@ -252,7 +252,7 @@ close(pb)
 # Load required library for plot arrangement
 library(gridExtra)
 
-save(us_slopes, file = "Data/Instrumental_slopes_D2.RData")
+save(us_slopes, file = "Data/Instrumental_slopes_D0.RData")
 load("Data/weekly_slopes_D2.RData")
 
 us_outline <- map_data("usa")
@@ -305,7 +305,7 @@ test_plot <- plot.weekly.duration.v.return(plot_data_weekly)
 test_plot
 
 
-load("Data/yearly_slopes_D0.RData")
+load("Data/yearly_slopes_D1.RData")
 
 # find the recurrence interval for an X year drought of severity level Z
 us_slopes <- us_slopes %>% mutate(RI_2 = slope*2 + intercept)
@@ -326,16 +326,24 @@ plot <- ggplot(us_slopes, aes(x = xbin, y = ybin, fill = RI_2)) +
                        midpoint = 2,
                        limits = c(0.9, 3.3))+
   theme_minimal()+
-  labs(title = "Return Interval of 2 Year Drought events > D0",
+  labs(title = "Return Interval of 2 Year Drought events > D1",
        subtitle = "Paleo PDSI Data",
        x = "", 
        y = "", 
-      fill = "Return Interval \n (Years)")
+      fill = "Return Interval \n (Years)")+
+  theme(plot.title = element_text(face = "bold", size = 13, hjust = 0.5), 
+        axis.text = element_blank(), 
+        axis.ticks = element_blank(), 
+        axis.title = element_blank(),
+        legend.background = element_rect(fill = "white", color = "gray50"),
+        legend.key.size = unit(0.8, "cm"),
+        legend.key = element_rect(color = "gray50"),
+        strip.text = element_text(face = "bold", size = 11))
 
 
 plot
 
-ggsave("Plots/paleo_2yr_recurrence_D2_plot.png", plot, width = 10, height = 6)
+ggsave("Plots/paleo_2yr_recurrence_D1_plot.png", plot, width = 10, height = 6)
 
 
 # power law
