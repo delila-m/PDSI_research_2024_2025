@@ -13,13 +13,63 @@ library(ggplot2)
 library(patchwork)
 
 
-# # This combines the evaluate.recurrence workflow with the
-#   # plot.data function to find the slope of the recurrence line
-# find.slope <- function(pmdi.set, xbin, ybin, pred_col,  
-#                        intensity_threshold = 2, 
-#                        only_severe = FALSE, 
-#                        severity_num = 2, severity_level = "D0", time_col){}
-
+# This function calculates Return intervals of a given duration and severity 
+  # given a yearly or instrumental USDM slopes file, and plots the values across the US
+recurrence.plot <- function(data, severity, duration)
+{
+  setwd("C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024")
+  
+  # grab the correct file of given severity
+  filepath_load <- paste0("Data/", data, "_slopes_", severity, ".RData")
+  load(filepath_load)
+  
+  # create title and subtitle for plot 
+  title <- paste0("Return Interval of ", duration, " Year Drought Events > ", 
+                  severity)
+  subtitle <- case_when(data == "yearly" ~ "Paleo USDM Data", 
+                        data == "instrumental" ~ "Modern USDM Data", 
+                        TRUE ~ "No Known Data Type")
+  
+  # find the recurrence interval for an X year drought of given severity level
+  us_slopes <- us_slopes %>% mutate(RI = slope*duration + intercept)
+  us_slopes$RI_yrs <- 10^us_slopes$RI
+  
+  # plot return intervals
+  us_outline <- map_data("usa")
+  
+  plot <- ggplot(us_slopes, aes(x = xbin, y = ybin, fill = RI_yrs)) +
+    geom_tile() +
+    geom_path(data = us_outline, aes(x = long, y = lat, group = group), 
+              color = "black", linewidth = 0.7, inherit.aes = FALSE) +
+    scale_fill_viridis_c(transform = "log10",
+                         limits = c(7, 2200),
+                         direction = -1)+
+    theme_minimal()+
+    labs(title = title,
+         subtitle = subtitle,
+         x = "", 
+         y = "", 
+         fill = "Return Interval \n (Years)")+
+    theme(plot.title = element_text(face = "bold", size = 13, hjust = 0.5), 
+          axis.text = element_blank(), 
+          axis.ticks = element_blank(), 
+          axis.title = element_blank(),
+          legend.background = element_rect(fill = "white", color = "gray50"),
+          legend.key.size = unit(0.8, "cm"),
+          legend.key = element_rect(color = "gray50"),
+          strip.text = element_text(face = "bold", size = 11))
+  
+  # create filepath to save
+  type <- case_when(data == "yearly" ~ "paleo", 
+                    data == "instrumental" ~ "modern", 
+                    TRUE ~ "unknown")
+  filepath_save <- paste0("Plots/", type, "_usdm_", duration, "yr_recurrence_", 
+                          severity, "_plot.png")
+  ggsave(filepath_save, plot, width = 10, height = 6)
+  
+  # return the created plot 
+  return(plot)
+}
 
 
 

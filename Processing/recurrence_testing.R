@@ -305,53 +305,11 @@ test_plot <- plot.weekly.duration.v.return(plot_data_weekly)
 test_plot
 
 
-load("Data/instrumental_slopes_D1.RData")
 
-# find the recurrence interval for an X year drought of severity level Z
-us_slopes <- us_slopes %>% mutate(RI_2 = slope*2 + intercept)
+testplot <- recurrence.plot("instrumental", "D1", 5)
+testplot
 
-us_slopes$RI_yrs <- 10^us_slopes$RI_2
-
-us_inst <- us_slopes
-
-# plot return intervals
-us_outline <- map_data("usa")
-
-plot <- ggplot(us_paleo, aes(x = xbin, y = ybin, fill = RI_yrs)) +
-  geom_tile() +
-  geom_path(data = us_outline, aes(x = long, y = lat, group = group), 
-            color = "black", linewidth = 0.7, inherit.aes = FALSE) +
-  
-  # fix color limits 
-  # scale_fill_gradient2(transform = "log10",
-  #                      # low = "darkred",
-  #                      # mid = "#F55727", 
-  #                      # high = "#EDBF72",
-  #                      fill = "viridis",
-  #                      midpoint = 200,
-  #                      limits = c(1, 2200))+
-  scale_fill_viridis_c(transform = "log10",
-                       limits = c(7, 2200))+
-  theme_minimal()+
-  labs(title = "Return Interval of 2 Year Drought events > D1",
-       subtitle = "Paleo USDM Data",
-       x = "", 
-       y = "", 
-      fill = "Return Interval \n (Years)")+
-  theme(plot.title = element_text(face = "bold", size = 13, hjust = 0.5), 
-        axis.text = element_blank(), 
-        axis.ticks = element_blank(), 
-        axis.title = element_blank(),
-        legend.background = element_rect(fill = "white", color = "gray50"),
-        legend.key.size = unit(0.8, "cm"),
-        legend.key = element_rect(color = "gray50"),
-        strip.text = element_text(face = "bold", size = 11))
-
-
-plot
-
-ggsave("Plots/instrumental_2yr_recurrence_D1_plot.png", plot, width = 10, height = 6)
-
+# difference plot and plot two lines on the histogram 
 
 
 # histogram plotting 
