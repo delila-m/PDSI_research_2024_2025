@@ -24,7 +24,7 @@ recurrence.plot <- function(data, severity, duration)
   load(filepath_load)
   
   # create title and subtitle for plot 
-  title <- paste0("Return Interval of ", duration, " Year Drought Events > ", 
+  title <- paste0("Return Interval of ", duration, " Year Drought Events >= ", 
                   severity)
   subtitle <- case_when(data == "yearly" ~ "Paleo USDM Data", 
                         data == "instrumental" ~ "Modern USDM Data", 
@@ -196,7 +196,7 @@ plot.duration.v.return.combined <- function(prediction_set, n_cells = 9,
 
 
 
-plot.data <- function(severe_droughts){
+plot.annual.data <- function(severe_droughts){
   
   # Calculate return intervals for different duration thresholds
   duration_values <- sort(unique(severe_droughts$duration))
@@ -219,6 +219,28 @@ plot.data <- function(severe_droughts){
   return(plot_data)
 }
 
+plot.weekly.data <- function(severe_droughts){
+  
+  # Calculate return intervals for different duration thresholds
+  duration_values <- sort(unique(severe_droughts$duration))
+  
+  # initialize dataframe 
+  plot_data <- data.frame()
+  
+  # loop through each duration 
+  for (dur in duration_values) {
+    # count the number of severe droughts less than or equal to the given duration 
+    count <- sum(severe_droughts$duration >= dur)
+    # calculate the return interval 
+    ri <- 25 / count
+    # add it all to a dataframe to return 
+    plot_data <- rbind(plot_data, 
+                       data.frame(duration = dur,
+                                  count = count,
+                                  return_interval = ri))
+  }
+  return(plot_data)
+}
 # This function calculates the slope of drought recurrence: duration vs. years
   # uses previously calculated plotting data 
   # returns the slope, intercept, and rsquared. 
@@ -254,12 +276,11 @@ plot.annual.duration.v.return <- function(plot_data){
     labs(
       title = "Drought Duration vs Return Interval",
       subtitle = "For drought events >= D2",
-      x = "Drought Duration (years)",
-      y = "Years",
+      x = "Drought Duration (Years)",
+      y = "Return Interval (Years)",
       color = "Metric"
     ) +
-    #scale_x_log10()+
-    #scale_y_log10()+
+    scale_y_log10()+
     theme_minimal() +
     theme(
       panel.grid.major = element_line(color = "gray80"),
@@ -279,14 +300,13 @@ plot.annual.duration.v.return <- function(plot_data){
 plot.weekly.duration.v.return <- function(plot_data){
   # broke the plotting data and actual plotting into two separate functions for debugging 
   plota <- ggplot(plot_data, aes(x = duration)) +
-    geom_line(aes(y = return_interval, color = "Return Interval"), linewidth = 1.2) +
-    geom_point(aes(y = return_interval, color = "Return Interval"), linewidth = 3) +
-    scale_color_manual(values = c("Return Interval" = "red")) +
+    geom_line(aes(y = return_interval), color = "#2E55A3", size = 1.2) +
+    geom_point(aes(y = return_interval), color = "#24427F", size = 3) +
     labs(
       title = "Drought Duration vs Return Interval",
       subtitle = "For drought events >= D2",
-      x = "Drought Duration (Days)",
-      y = "Days",
+      x = "Drought Duration (Years)",
+      y = "Return Interval (Years)",
       color = "Metric"
     ) +
     scale_y_log10()+

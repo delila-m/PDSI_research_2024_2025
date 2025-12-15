@@ -11,12 +11,61 @@ source("Functions/drought_functions.R")
 # load("C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/Data/PMDIPredictionSet.Rdata")
 load("Data/PMDIPredictionSet.Rdata")
 
-# Previous categorical model for comparison
-#setwd("C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/Data/UpdatedCleaned_0.5")
-load("Data/UpdatedCleaned_0.5/RFAnalysis0.5_factor_updated.Rdata")
-
 # weekly data
 load("Data/SampledWeekly_0.5.RData")
+
+# Previous categorical model for comparison
+#setwd("C:/Users/dgm239/Downloads/Research_2025/PDSI_research_2024/Data/UpdatedCleaned_0.5")
+load("Data/UpdatedCleaned_0.5/RFAnalysis0.5YearSplit.Rdata")
+
+test_0.5 <- convert.cat.USDM(test.yearsplit.0.5, "predictions")
+test_0.5_actual <- convert.cat.USDM(test.yearsplit.0.5, "USDM_Avg")
+train_0.5 <- convert.cat.USDM(train.yearsplit.0.5, "USDM_Avg")
+
+train_preds <- data.frame(preds = rf.ranger.fit.yearsplit.0.5$predictions)
+train_preds_cat <- convert.cat.USDM(train_preds, "preds")
+train_preds_cat$USDM_factor <- factor(
+  train_preds_cat$USDM_factor,
+  levels = levels(train_0.5$USDM_factor)
+)
+
+full_modern_set_0.5 <- bind_rows(train_0.5, test_0.5)
+
+# table evaluating class metrics 
+library(yardstick)
+library(gt)
+bal_acc_oob <- tibble(
+  truth = train_0.5$USDM_factor,
+  estimate = train_preds_cat$USDM_factor) %>%
+  bal_accuracy(truth, estimate) %>%
+  pull(.estimate)
+
+bal_acc_test <- tibble(
+  truth = test_0.5$USDM_factor,
+  estimate = test_0.5_actual$USDM_factor) %>%
+  bal_accuracy(truth, estimate) %>%
+  pull(.estimate)
+
+bal_acc_tbl <- tibble(
+  Dataset = c("Training (2000-2020)", "Test (2020-2024)"),
+  `Balanced Accuracy` = c(bal_acc_oob, bal_acc_test))
+
+library(gt)
+
+bal_acc_tbl %>%
+  gt() %>%
+  tab_header(
+    title = "Random Forest Balanced Accuracy") %>%
+  fmt_percent(
+    columns = `Balanced Accuracy`,
+    decimals = 2) %>%
+  cols_align(
+    align = "center",
+    columns = `Balanced Accuracy`) %>%
+  opt_table_outline() %>%
+  tab_source_note(
+    source_note = "Training performance estimated via OOB predictions" )
+
 
 
 pmdi_one_cell <- pmdi_prediction_set %>%
@@ -173,8 +222,47 @@ test_plot <- plot.annual.duration.v.return(plot_data)
 test_plot
 
 
+# plot weekly/annual together
+weekly_df <- plot_data_weekly %>%
+  mutate(scale = "Weekly")
+
+annual_df <- plot_data %>%
+  mutate(scale = "Annual")
+
+combined_df <- bind_rows(weekly_df, annual_df)
+
+ggplot(combined_df, aes(x = duration, y = return_interval, color = scale)) +
+  geom_line(linewidth = 1.2) +
+  geom_point(size = 3) +
+  scale_color_manual(
+    values = c(
+      "Weekly" = "#2E55A3",
+      "Annual" = "#A34E2E"
+    )
+  ) +
+  scale_y_log10() +
+  labs(
+    title = "Drought Duration vs Return Interval",
+    subtitle = "Weekly and Annual Aggregations (Drought ≥ D2)",
+    x = "Drought Duration (Years)",
+    y = "Return Interval (Years)",
+    color = "Aggregation"
+  ) +
+  theme_minimal() +
+  theme(
+    panel.grid.major = element_line(color = "gray80"),
+    panel.grid.minor = element_line(color = "gray90"),
+    plot.title = element_text(size = 16, face = "bold"),
+    axis.title = element_text(size = 12),
+    axis.text = element_text(size = 10),
+    legend.position = "bottom"
+  )
+
+ggsave("Plots/modern_and_paleo_duration_v_return_D2.png", width = 10, height = 6)
+
+
 #create a data.frame of unique X/Y pairs to loop through
-latlongpairs <- train_0.5 %>%
+latlongpairs <- full_modern_set_0.5 %>%
   distinct(bin.x, bin.y)
 
 # initialize data frame
@@ -192,9 +280,9 @@ for(index in 1:nrow(latlongpairs)){
   current_ybin = latlongpairs$bin.y[index]
 
   # evaluate the recurrence intervals for that cell
-  recurrence_list <- evaluate.annual.recurrence(train_0.5, xbin = current_xbin,
+  recurrence_list <- evaluate.annual.recurrence(full_modern_set_0.5, xbin = current_xbin,
                                          ybin = current_ybin,
-                                         intensity_threshold = 2,
+                                         intensity_threshold = 3,
                                          pred_col = "USDM_factor", time_col = "Date")
 
   drought_events <- recurrence_list[[2]]
@@ -252,24 +340,8 @@ close(pb)
 # Load required library for plot arrangement
 library(gridExtra)
 
-save(us_slopes, file = "Data/Instrumental_slopes_D0.RData")
-load("Data/weekly_slopes_D1.RData")
-
-us_outline <- map_data("usa")
-
-plot <- ggplot(us_slopes, aes(x = xbin, y = ybin, fill = slope)) +
-  geom_tile() +
-  geom_path(data = us_outline, aes(x = long, y = lat, group = group), 
-            color = "black", linewidth = 0.7, inherit.aes = FALSE) +
-  scale_fill_gradient2(low = "darkgreen",
-                       high = "darkblue")+
-  theme_minimal()+
-  labs(title = "Slope of drought recurrence for weekly events > D0", 
-       x = "", 
-       y = "")
-
-
-plot
+save(us_slopes, file = "Data/Instrumental_slopes_D1.RData")
+load("Data/instrumental_slopes_D1.RData")
 
 
 # Slice weekly data for use on laptop
@@ -291,29 +363,36 @@ list_test_weekly <- summarize.weekly.drought.events(drought_events_test_weekly,
 drought_events_test2_weekly_fixed <- list_test_weekly[[1]]
 drought_intervals_test_weekly <- list_test_weekly[[2]]
 
-full_test_weekly <- evaluate.weekly.recurrence(test_0.5, xbin = -120.5, ybin = 40.5,
-                                 pred_col = "predicted", time_col = "Date")
+full_test_weekly <- evaluate.weekly.recurrence(full_modern_set_0.5, xbin = -113.5, ybin = 35.5,
+                                 pred_col = "USDM_factor", time_col = "Date", 
+                                 intensity_threshold = 4 )
 
 
 full_drought_events_test2 <- full_test_weekly[[2]]
 full_drought_intervals_test <- full_test_weekly[[3]]
 
-plot_data_weekly <- plot.data(full_drought_events_test2)
+plot_data_weekly <- plot.weekly.data(full_drought_events_test2)
 weekly_slope <- recurrence.slope(plot_data_weekly)
 
 test_plot <- plot.weekly.duration.v.return(plot_data_weekly)
 test_plot
+ggsave("Plots/modern_duration_v_return_D2.png", width = 10, height = 6)
+
+save(plot_data, file = "Data/paleo_return_plot_data_D2.Rdata")
 
 
-
-testplot <- recurrence.plot("instrumental", "D1", 5)
+testplot <- recurrence.plot("instrumental", "D1", 2)
 testplot
+
 
 # difference plot and plot two lines on the histogram 
 
 
 # histogram plotting 
-histo <- ggplot(us_inst, aes(x=RI_yrs))+
+us_slopes <- us_slopes %>% mutate(RI = slope*2 + intercept)
+us_slopes$RI_yrs <- 10^us_slopes$RI
+
+histo <- ggplot(us_slopes, aes(x=RI_yrs))+
   geom_histogram(color = "#244380", fill = "#2E55A3")+
   labs(title = "Instrumental Return Intervals of 2 Year Drought", 
        x = "Return Interval (Years)",
@@ -323,6 +402,37 @@ histo <- ggplot(us_inst, aes(x=RI_yrs))+
   
 histo
 
+paleo_slopes <- us_slopes
+
+plot_df <- bind_rows(
+  us_slopes  %>% mutate(source = "Modern"),
+  paleo_slopes %>% mutate(source = "Paleo")
+)
+
+ggplot(plot_df, aes(x = RI_yrs, fill = source)) +
+  geom_histogram(
+    position = "identity",
+    alpha = 0.5,
+    bins = 30, 
+    color = "#4A4746"
+  ) +
+  scale_fill_manual(
+    values = c(
+      "Modern" = "#2E55A3",
+      "Paleo" = "#A34E2E"
+    )
+  ) +
+  scale_x_log10() +
+  labs(
+    title = "Return Intervals of 2-Year Drought Events >= D1",
+    x = "Return Interval (Years)",
+    y = "Count",
+    fill = "Data Source"
+  ) +
+  theme_minimal()
+
+
+ggsave("Plots/modern_v_paleo_2yr_D1_histo.png", width = 8, height = 2)
 # power law
 # functionalize approach http://127.0.0.1:10757/graphics/plot_zoom_png?width=1080&height=692
 # weekly data making the same plots with the same gridcell
@@ -332,11 +442,34 @@ histo
 
 # calculate recurrence for one level of duration: ex. recurrence of 2 year long D2 level drought and plot across the whole country 
 
+# highlight cell we are looking at 
+us_slopes <- us_slopes %>% 
+  mutate(correct_cell = (xbin == -113.5 & ybin == 35.5))
 
+us_outline <- map_data("usa")
 
+plot <- ggplot(us_slopes, aes(x = xbin, y = ybin, fill = correct_cell)) +
+  geom_tile() +
+  geom_path(data = us_outline, aes(x = long, y = lat, group = group), 
+            color = "black", linewidth = 0.7, inherit.aes = FALSE) +
+  theme_minimal()+
+  scale_fill_manual(values = c("TRUE" = "#D4260F", 
+                               "FALSE" = "grey"))+
+  labs(title = "",
+       x = "", 
+       y = "")+
+  theme(plot.title = element_text(face = "bold", size = 13, hjust = 0.5), 
+        axis.text = element_blank(), 
+        axis.ticks = element_blank(), 
+        axis.title = element_blank(),
+        legend.background = element_rect(fill = "white", color = "gray50"),
+        legend.key.size = unit(0.8, "cm"),
+        legend.key = element_rect(color = "gray50"),
+        strip.text = element_text(face = "bold", size = 11))
 
+plot
 
-ggsave("Plots/instrumental_2yr_recurrence_D1_histogram.png", width = 5, height = 2)
+ggsave("Plots/highlighted_cell.png", width = 10, height = 6)
 
 library(dplyr)
 library(ggplot2)
