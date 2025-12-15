@@ -1296,14 +1296,14 @@ clean.pmdi.data <- function(state, spat.us.pmdi, LocationFactor = TRUE){
 }
 
 # This function converts the weighted average USDM rating back into categorical variable 
-convert.cat.USDM <- function(usdm.data){
+convert.cat.USDM <- function(usdm.data, col.name){
   usdm.data <- usdm.data %>% 
     mutate(USDM_factor = case_when(
-            USDM_Avg < 0.5 ~ "None",
-            USDM_Avg < 1.5 ~ "D0",
-            USDM_Avg < 2.5 ~ "D1",
-            USDM_Avg < 3.5 ~ "D2",
-            USDM_Avg < 4.5 ~ "D3",
+            .data[[col.name]] < 0.5 ~ "None",
+            .data[[col.name]] < 1.5 ~ "D0",
+            .data[[col.name]] < 2.5 ~ "D1",
+            .data[[col.name]] < 3.5 ~ "D2",
+            .data[[col.name]] < 4.5 ~ "D3",
             TRUE ~ "D4")) %>% 
     mutate(USDM_factor = factor(USDM_factor))
   return(usdm.data)
