@@ -1,0 +1,213 @@
+---
+title: "cesm2 waccm ssp3.7 "
+output: html_notebook
+---
+
+
+```{r}
+library(sf)
+library(terra)
+library(tigris)
+library(dplyr)
+library(tidyverse)
+library(tidyterra)
+library(ggplot2)
+library(ncdf4)
+```
+
+```{r load data}
+global_pdsi<-rast("C:/Users/lam858/CESM2-WACCM/ssp370.nc")
+land_mask<-rast("C:/Users/lam858/CESM2-WACCM/CESM2-WACCM land mask.nc")
+
+#data records for reference :
+#The PDSI_CMIP6 dataset provides NetCDF files containing the estimated PDSI from each CMIP6 model (Table 1)43. The monthly dataset spans from 1850 to 2014 for historical period and from 2015 to 2094 under four climate change scenarios, with a re-gridded spatial resolution of 1°. Each NetCDF file is linked with a land mask map to facilitate the extraction of specific study areas (Fig. 3). The files also contain essential metadata, including the date of generation, contact information for the authors, and variable attributes
+```
+
+```{r crop}
+#the world is sideways (lat/long flipped)
+
+#cropping to a box keeping in mind that it is sideways
+
+us_box_sideways <- ext(c(20, 60, 50, 150))  # c(xmin, xmax, ymin, ymax)
+pdsi_crop_sideways <- crop(global_pdsi, us_box_sideways)
+land_crop <- crop(land_mask, us_box_sideways)
+ plot(pdsi_crop_sideways[[1]], main="PDSI US Layer 1")
+```
+```{r flip n fix}
+#just one layer so i can see if it works
+pdsi_transposed <- t(pdsi_crop_sideways)
+pdsi_us_upright <- flip(pdsi_transposed, "vertical")
+
+
+land_crop <- flip(t(land_crop), "vertical")
+pdsi_us_land <- mask(pdsi_us_upright, land_crop, maskvalues=0)
+
+plot(pdsi_us_upright[[1]], main="PDSI US Layer 1 Upright")
+```
+```{r loop test}
+n_test <- 5
+for(i in 1:n_test){
+  layer <- pdsi_crop_sideways[[i]]
+  layer_upright <- flip(t(layer), "vertical")
+  layer_masked <- mask(layer_upright, land_crop, maskvalues=0)
+  cat("Layer", i, "processed\n")
+}
+```
+```{r processing layers in chunks}
+n_layers <- nlyr(pdsi_crop_sideways)
+chunk_size <- 500         # process 500 layers at a time
+output_dir <- "C:/Users/lam858/CESM2-WACCM/processed_chunks/"
+dir.create(output_dir, showWarnings = FALSE)
+
+# Loop through in chunks
+for(start in seq(1, n_layers, by=chunk_size)) {
+  
+  end <- min(start + chunk_size - 1, n_layers)
+  cat("Processing layers", start, "to", end, "\n")
+  
+  pdsi_chunk_list <- vector("list", end - start + 1)
+  
+  for(i in start:end) {
+    layer <- pdsi_crop_sideways[[i]]
+    
+    # Transpose + flip vertically
+    layer_upright <- flip(t(layer), "vertical")
+    
+    # Apply land mask
+    layer_masked <- mask(layer_upright, land_crop, maskvalues=0)
+    
+    pdsi_chunk_list[[i - start + 1]] <- layer_masked
+  }
+  
+  # Combine chunk into a SpatRaster
+  pdsi_chunk_rast <- rast(pdsi_chunk_list)
+  
+  filename <- paste0(output_dir, "pdsi_us_chunk_", start, "_", end, ".nc")
+writeRaster(
+  pdsi_chunk_rast, 
+  filename, 
+  overwrite = TRUE,
+  filetype = "NETCDF"
+)
+  
+  cat("Finished layers", start, "to", end, "\n\n")
+}
+```
+
+```{r chunks into one}
+chunk_files <- list.files(
+  "C:/Users/lam858/CESM2-WACCM/processed_chunks/",
+  pattern = "\\.nc$", 
+  full.names = TRUE
+)
+
+pdsi_us <- rast(chunk_files)
+
+writeRaster(
+  pdsi_us, 
+  "C:/Users/lam858/CESM2-WACCM/pdsi_us_full.nc", 
+  overwrite = TRUE,
+  filetype = "NETCDF"
+)
+
+pdsi_us
+nlyr(pdsi_us)
+ext(pdsi_us)        
+```
+```{r precision crop}
+#gosh there was probably a cleaner way to do this 
+#will have to do it manually
+
+# Correcting raster coordinates
+pdsi_us_shifted <- shift(pdsi_us_upright, dx = -201, dy = -5)
+ext(pdsi_us_shifted)
+
+states <- tigris::states(cb = TRUE)
+states_vect <- vect(states)
+conus_states <- states_vect[!states_vect$STUSPS %in% c("AK","HI","PR"), ]
+conus_buffer <- buffer(conus_states, width = 2) #cause it was getting cut off at the top, can just plot the pdsi mask if i want
+
+pdsi_us_crop <- crop(pdsi_us_shifted, conus_states)
+pdsi_us_mask <- mask(pdsi_us_crop, conus_states)
+
+plot(pdsi_us_mask[[1]], main = "PDSI Continental US Layer 1")
+plot(conus_buffer, add = TRUE)
+
+#ask nick about this fr cause me parece JANKY
+```
+
+```{r assigning time}
+#it doesn't have time, just various bands, which I the data records say are monthly
+#The PDSI_CMIP6 dataset provides NetCDF files containing the estimated PDSI from each CMIP6 model (Table 1)43. The monthly dataset spans from 1850 to 2014 for historical period and from 2015 to 2094 under four climate change scenarios, with a re-gridded spatial resolution of 1°.
+
+n_bands <- nlyr(pdsi_us)  
+start_date <- ymd("1850-01-01")
+time_vector <- seq.Date(start_date, by = "month", length.out = n_layers)
+```
+
+```{r cube into long}
+pdsi_long <- as_tibble(pdsi_us_mask, xy = TRUE, na.rm = TRUE)
+
+# Add layer names
+layer_names <- names(pdsi_us_mask)
+pdsi_long <- pdsi_long %>%
+  pivot_longer(
+    cols = all_of(layer_names),
+    names_to = "layer",
+    values_to = "pdsi"
+  )
+
+pdsi_long <- pdsi_long %>%
+  mutate(
+    layer_index = as.integer(gsub(".*_(\\d+)", "\\1", layer)),
+    time = time_vector[layer_index]
+  ) %>%
+  select(x, y, time, pdsi) 
+
+#rename columns for convenience
+pdsi_long <- pdsi_long %>% rename(lon = x, lat = y)
+```
+
+```{r checking on the dataframe}
+summary(pdsi_long$pdsi)
+any(is.na(pdsi_long$pdsi))
+range(pdsi_long$time)
+
+ggplot(pdsi_long %>% filter(time == as.Date("2015-01-01")), aes(x = lon, y = lat, fill = pdsi)) +
+  geom_raster() +
+  coord_fixed() +
+  scale_fill_viridis_c() +
+  theme_minimal() +
+  labs(title = "PDSI January 2015")
+```
+```{r save the data}
+
+# Save as NetCDF
+writeRaster(pdsi_ssp_valid, 
+            "C:/Users/lam858/CESM2-WACCM/pdsi_us_ssp370.nc",
+            overwrite = TRUE,
+            filetype = "NETCDF")
+
+write_csv(pdsi_long, "pdsi_us_long_ssp370.csv")
+```
+
+```{r summer averages}
+#to align with delila
+
+summer_average <- function(pdsi_long_data){
+  pdsi_long_data %>%
+    mutate(month = month(time), year = year(time)) %>%
+    filter(month %in% c(6, 7, 8)) %>%
+    group_by(year, lon, lat) %>%
+    summarise(PDSI_Summer_Avg = mean(pdsi, na.rm = TRUE), .groups = "drop")
+}
+
+summer_pdsi <- summer_average(pdsi_long)
+head(summer_pdsi)
+```
+
+
+
+
+
+
